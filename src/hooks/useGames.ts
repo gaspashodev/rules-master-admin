@@ -42,8 +42,9 @@ export function useCreateGame() {
 
   return useMutation({
     mutationFn: async (data: GameFormData): Promise<Game> => {
-      const id = `game-${Date.now()}`;
-
+      // Utiliser le slug comme ID (plus lisible)
+      const id = data.slug || `game-${Date.now()}`;
+      
       const { data: game, error } = await supabase
         .from('games')
         .insert([{ id, ...data, order_index: 999 }])

@@ -1,5 +1,8 @@
 import { Routes, Route } from 'react-router-dom';
+import { AuthProvider } from '@/hooks/useAuth';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Layout } from '@/components/layout/Layout';
+import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { GamesListPage } from './pages/GamesListPage';
 import { GameFormPage } from './pages/GameFormPage';
@@ -7,18 +10,30 @@ import { ConceptFormPage } from './pages/ConceptFormPage';
 
 function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/games" element={<GamesListPage />} />
-        <Route path="/games/new" element={<GameFormPage />} />
-        <Route path="/games/:id" element={<GameFormPage />} />
-        <Route path="/concepts/:id" element={<ConceptFormPage />} />
-        <Route path="/concepts" element={<PlaceholderPage title="Concepts" />} />
-        <Route path="/quizzes" element={<PlaceholderPage title="Quiz" />} />
-        <Route path="/settings" element={<SettingsPage />} />
-      </Route>
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        {/* Public route */}
+        <Route path="/login" element={<LoginPage />} />
+
+        {/* Protected routes */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/games" element={<GamesListPage />} />
+          <Route path="/games/new" element={<GameFormPage />} />
+          <Route path="/games/:id" element={<GameFormPage />} />
+          <Route path="/concepts/:id" element={<ConceptFormPage />} />
+          <Route path="/concepts" element={<PlaceholderPage title="Concepts" />} />
+          <Route path="/quizzes" element={<PlaceholderPage title="Quiz" />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
+      </Routes>
+    </AuthProvider>
   );
 }
 

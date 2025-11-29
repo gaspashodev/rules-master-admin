@@ -13,8 +13,9 @@ export interface Game {
   min_age: number;
   bgg_rating: number | null;
   bgg_url: string | null;
-  rules_pdf_url: string | null;
   cover_image_url: string | null;
+  barcode: string | null;
+  affiliate_url: string | null;
   published: boolean;
   featured: boolean;
   order_index: number;
@@ -74,6 +75,7 @@ export interface QuizQuestion {
   correct_answer_id: string;
   explanation: string;
   difficulty: 'easy' | 'medium' | 'hard';
+  image_url: string | null;
   created_at: string;
 }
 
@@ -95,8 +97,9 @@ export interface GameFormData {
   min_age: number;
   bgg_rating: number | null;
   bgg_url: string | null;
-  rules_pdf_url: string | null;
   cover_image_url: string | null;
+  barcode: string | null;
+  affiliate_url: string | null;
   published: boolean;
   featured: boolean;
 }
@@ -127,4 +130,50 @@ export interface QuizQuestionFormData {
   correct_answer_id: string;
   explanation: string;
   difficulty: 'easy' | 'medium' | 'hard';
+  order_index: number;
+  image_url: string | null;
+}
+
+// ============ VIDEO RESOURCES ============
+
+export interface VideoResource {
+  id: string;
+  game_id: string;
+  title: string;
+  channel: string;
+  url: string;
+  thumbnail_url: string | null;
+  duration: number; // Durée en minutes
+  language: string;
+  order_index: number;
+  created_at: string;
+}
+
+export interface VideoResourceFormData {
+  title: string;
+  channel: string;
+  url: string;
+  thumbnail_url: string | null;
+  duration: number; // Durée en minutes
+  language: string;
+  order_index: number;
+}
+
+// ============ GAME RULES (PDF) ============
+
+export interface GameRule {
+  id: string;
+  game_id: string;
+  title: string;
+  pdf_url: string;
+  language: string;
+  order_index: number;
+  created_at: string;
+}
+
+export interface GameRuleFormData {
+  title: string;
+  pdf_url: string;
+  language: string;
+  order_index: number;
 }

@@ -6,7 +6,6 @@ import {
   BookOpen,
   HelpCircle,
   Settings,
-  LogOut,
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
@@ -25,7 +24,7 @@ export function Sidebar() {
   const location = useLocation();
 
   return (
-    <div className="flex h-full w-64 flex-col bg-card border-r">
+    <div className="flex h-full w-full flex-col bg-card border-r">
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 px-6 border-b">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-lg">
@@ -38,7 +37,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-4">
+      <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
         <p className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Contenu
         </p>
@@ -87,14 +86,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-
-      {/* Footer */}
-      <div className="border-t p-4">
-        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
-          <LogOut className="h-5 w-5" />
-          Déconnexion
-        </button>
-      </div>
     </div>
   );
 }

@@ -1,5 +1,22 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,12 +42,103 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useConcepts, useCreateConcept, useDeleteConcept } from '@/hooks/useConcepts';
+import { useConcepts, useCreateConcept, useDeleteConcept, useReorderConcepts } from '@/hooks/useConcepts';
 import { Plus, GripVertical, Clock, ChevronRight, Trash2, BookOpen } from 'lucide-react';
-import type { ConceptFormData } from '@/types/database';
+import type { ConceptFormData, Concept } from '@/types/database';
 
 interface ConceptsListProps {
   gameId: string;
+}
+
+function SortableConceptItem({ concept, gameId, onDelete, onNavigate }: { 
+  concept: Concept; 
+  gameId: string;
+  onDelete: (id: string) => void;
+  onNavigate: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: concept.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-4 p-4 rounded-lg border hover:bg-accent/50 transition-colors group bg-card"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing touch-none"
+      >
+        <GripVertical className="h-5 w-5 text-muted-foreground" />
+      </button>
+      
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">
+        {concept.order_index}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="font-medium truncate">{concept.name}</p>
+        <p className="text-sm text-muted-foreground truncate">{concept.description}</p>
+      </div>
+
+      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <Clock className="h-4 w-4" />
+          {concept.estimated_time} min
+        </span>
+        <span>{'★'.repeat(concept.difficulty)}{'☆'.repeat(3 - concept.difficulty)}</span>
+      </div>
+
+      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Supprimer ce concept ?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Cette action supprimera également toutes les sections et quiz associés.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => onDelete(concept.id)}
+                className="bg-destructive text-destructive-foreground"
+              >
+                Supprimer
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8"
+          onClick={() => onNavigate(concept.id)}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function ConceptsList({ gameId }: ConceptsListProps) {
@@ -38,6 +146,7 @@ export function ConceptsList({ gameId }: ConceptsListProps) {
   const { data: concepts, isLoading } = useConcepts(gameId);
   const createConcept = useCreateConcept();
   const deleteConcept = useDeleteConcept();
+  const reorderConcepts = useReorderConcepts();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState<ConceptFormData>({
@@ -49,6 +158,34 @@ export function ConceptsList({ gameId }: ConceptsListProps) {
     introduction: '',
     summary: '',
   });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px de mouvement minimum pour activer le drag
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id && concepts) {
+      const oldIndex = concepts.findIndex((c) => c.id === active.id);
+      const newIndex = concepts.findIndex((c) => c.id === over.id);
+      
+      const reordered = arrayMove(concepts, oldIndex, newIndex);
+      const updates = reordered.map((c, index) => ({
+        id: c.id,
+        order_index: index + 1,
+      }));
+
+      reorderConcepts.mutate({ gameId, concepts: updates });
+    }
+  };
 
   const handleCreate = async () => {
     await createConcept.mutateAsync({
@@ -68,6 +205,10 @@ export function ConceptsList({ gameId }: ConceptsListProps) {
       introduction: '',
       summary: '',
     });
+  };
+
+  const handleDelete = (conceptId: string) => {
+    deleteConcept.mutate({ id: conceptId, gameId });
   };
 
   if (isLoading) {
@@ -171,69 +312,28 @@ export function ConceptsList({ gameId }: ConceptsListProps) {
             </Button>
           </div>
         ) : (
-          <div className="space-y-2">
-            {concepts?.map((concept) => (
-              <div
-                key={concept.id}
-                className="flex items-center gap-4 p-4 rounded-lg border hover:bg-accent/50 transition-colors group"
-              >
-                <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
-                
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">
-                  {concept.order_index}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{concept.name}</p>
-                  <p className="text-sm text-muted-foreground truncate">{concept.description}</p>
-                </div>
-
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    {concept.estimated_time} min
-                  </span>
-                  <span>{'★'.repeat(concept.difficulty)}{'☆'.repeat(3 - concept.difficulty)}</span>
-                </div>
-
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Supprimer ce concept ?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Cette action supprimera également toutes les sections et quiz associés.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Annuler</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => deleteConcept.mutate({ id: concept.id, gameId })}
-                          className="bg-destructive text-destructive-foreground"
-                        >
-                          Supprimer
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8"
-                    onClick={() => navigate(`/concepts/${concept.id}`)}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={concepts?.map(c => c.id) || []}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-2">
+                {concepts?.map((concept) => (
+                  <SortableConceptItem
+                    key={concept.id}
+                    concept={concept}
+                    gameId={gameId}
+                    onDelete={handleDelete}
+                    onNavigate={(id) => navigate(`/concepts/${id}`)}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
         )}
       </CardContent>
     </Card>

@@ -55,8 +55,9 @@ export function useCreateConcept() {
 
   return useMutation({
     mutationFn: async ({ gameId, data }: { gameId: string; data: ConceptFormData }): Promise<Concept> => {
-      const id = `concept-${Date.now()}`;
-
+      // Générer un ID lisible basé sur le game_id et l'ordre
+      const id = `${gameId}-concept-${data.order_index}`;
+      
       const { data: concept, error } = await supabase
         .from('concepts')
         .insert([{ id, game_id: gameId, ...data }])
@@ -107,11 +108,11 @@ export function useDeleteConcept() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, gameId }: { id: string; gameId: string }): Promise<void> => {
+    mutationFn: async (params: { id: string; gameId: string }): Promise<void> => {
       const { error } = await supabase
         .from('concepts')
         .delete()
-        .eq('id', id);
+        .eq('id', params.id);
 
       if (error) throw error;
     },
@@ -131,11 +132,10 @@ export function useCreateSection() {
 
   return useMutation({
     mutationFn: async ({ conceptId, data }: { conceptId: string; data: SectionFormData }): Promise<LessonSection> => {
-      const id = `section-${Date.now()}`;
-
+      // Ne pas envoyer d'ID - Supabase le génère automatiquement (uuid_generate_v4)
       const { data: section, error } = await supabase
         .from('lesson_sections')
-        .insert([{ id, concept_id: conceptId, ...data }])
+        .insert([{ concept_id: conceptId, ...data }])
         .select()
         .single();
 
@@ -156,11 +156,11 @@ export function useUpdateSection() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, conceptId, data }: { id: string; conceptId: string; data: Partial<SectionFormData> }): Promise<LessonSection> => {
+    mutationFn: async (params: { id: string; conceptId: string; data: Partial<SectionFormData> }): Promise<LessonSection> => {
       const { data: section, error } = await supabase
         .from('lesson_sections')
-        .update(data)
-        .eq('id', id)
+        .update(params.data)
+        .eq('id', params.id)
         .select()
         .single();
 
@@ -181,17 +181,67 @@ export function useDeleteSection() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, conceptId }: { id: string; conceptId: string }): Promise<void> => {
+    mutationFn: async (params: { id: string; conceptId: string }): Promise<void> => {
       const { error } = await supabase
         .from('lesson_sections')
         .delete()
-        .eq('id', id);
+        .eq('id', params.id);
 
       if (error) throw error;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['concepts', 'detail', variables.conceptId] });
       toast.success('Section supprimée');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+}
+
+export function useReorderConcepts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: { gameId: string; concepts: { id: string; order_index: number }[] }): Promise<void> => {
+      // Exécuter chaque update et attendre le résultat
+      for (const c of params.concepts) {
+        const { error } = await supabase
+          .from('concepts')
+          .update({ order_index: c.order_index })
+          .eq('id', c.id);
+        
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_, params) => {
+      queryClient.invalidateQueries({ queryKey: ['concepts', params.gameId] });
+      toast.success('Ordre mis à jour');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+}
+
+export function useReorderSections() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: { conceptId: string; sections: { id: string; order_index: number }[] }): Promise<void> => {
+      // Exécuter chaque update et attendre le résultat
+      for (const s of params.sections) {
+        const { error } = await supabase
+          .from('lesson_sections')
+          .update({ order_index: s.order_index })
+          .eq('id', s.id);
+        
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_, params) => {
+      queryClient.invalidateQueries({ queryKey: ['concepts', 'detail', params.conceptId] });
+      toast.success('Ordre mis à jour');
     },
     onError: (error: Error) => {
       toast.error(`Erreur: ${error.message}`);
