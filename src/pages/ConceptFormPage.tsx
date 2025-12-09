@@ -28,6 +28,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import {
   useConcept,
   useUpdateConcept,
@@ -35,10 +36,13 @@ import {
   useUpdateSection,
   useDeleteSection,
   useReorderSections,
+  useCreateBlock,
+  useUpdateBlock,
+  useDeleteBlock,
+  useReorderBlocks,
 } from '@/hooks/useConcepts';
 import { QuizEditor } from '@/components/quiz/QuizEditor';
-import type { SectionFormData, LessonSection } from '@/types/database';
-import { calculateEstimatedTime } from '@/lib/utils';
+import type { SectionFormData, BlockFormData, LessonSection, SectionBlock } from '@/types/database';
 import {
   ArrowLeft,
   Save,
@@ -53,6 +57,9 @@ import {
   Code,
   Clock,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid,
 } from 'lucide-react';
 
 import {
@@ -73,7 +80,9 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-const sectionTypes = [
+// ============ CONSTANTES ============
+
+const blockTypes = [
   { value: 'text', label: 'Texte', icon: FileText, color: 'bg-blue-500' },
   { value: 'image', label: 'Image', icon: Image, color: 'bg-green-500' },
   { value: 'video', label: 'Vidéo', icon: Video, color: 'bg-red-500' },
@@ -81,19 +90,24 @@ const sectionTypes = [
   { value: 'example', label: 'Exemple', icon: Code, color: 'bg-purple-500' },
 ];
 
-const getSectionTypeInfo = (type: string) => {
-  return sectionTypes.find((t) => t.value === type) || sectionTypes[0];
+const getBlockTypeInfo = (type: string) => {
+  return blockTypes.find((t) => t.value === type) || blockTypes[0];
 };
 
-interface SortableSectionItemProps {
-  section: LessonSection;
-  onEdit: (section: LessonSection) => void;
+const MAX_BLOCKS_PER_SECTION = 6;
+const MAX_CONTENT_LENGTH = 1500;
+
+// ============ COMPOSANT BLOC SORTABLE ============
+
+interface SortableBlockItemProps {
+  block: SectionBlock;
+  onEdit: (block: SectionBlock) => void;
   onDelete: (id: string) => void;
 }
 
-function SortableSectionItem({ section, onEdit, onDelete }: SortableSectionItemProps) {
+function SortableBlockItem({ block, onEdit, onDelete }: SortableBlockItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: section.id,
+    id: block.id,
   });
 
   const style = {
@@ -102,72 +116,75 @@ function SortableSectionItem({ section, onEdit, onDelete }: SortableSectionItemP
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const typeInfo = getSectionTypeInfo(section.section_type);
+  const typeInfo = getBlockTypeInfo(block.block_type);
   const Icon = typeInfo.icon;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-4 p-4 rounded-lg border hover:bg-accent/50 transition-colors group bg-card"
+      className="flex items-center gap-3 p-3 rounded-md border bg-background hover:bg-accent/30 transition-colors group"
     >
-      <Button
+      <button
         type="button"
-        variant="ghost"
-        size="icon"
-        className="cursor-grab active:cursor-grabbing touch-none h-8 w-8"
+        className="cursor-grab active:cursor-grabbing touch-none"
         {...attributes}
         {...listeners}
       >
-        <GripVertical className="h-5 w-5 text-muted-foreground" />
-      </Button>
-      <div className={`p-2 rounded ${typeInfo.color}`}>
-        <Icon className="h-4 w-4 text-white" />
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </button>
+      
+      <div className={`p-1.5 rounded ${typeInfo.color}`}>
+        <Icon className="h-3 w-3 text-white" />
       </div>
+      
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <Badge variant="outline">{typeInfo.label}</Badge>
-          {section.title && <span className="font-medium">{section.title}</span>}
+          <Badge variant="outline" className="text-xs">{typeInfo.label}</Badge>
         </div>
-        <p className="text-sm text-muted-foreground truncate mt-1">
-          {section.section_type === 'image' && section.image_url
-            ? section.alt_text || 'Image sans description'
-            : section.content.substring(0, 80)}
-          {section.content.length > 80 && '...'}
+        <p className="text-xs text-muted-foreground truncate mt-0.5">
+          {block.block_type === 'image' && block.image_url
+            ? block.alt_text || 'Image'
+            : block.block_type === 'video' && block.video_url
+            ? block.alt_text || 'Vidéo'
+            : block.content.substring(0, 60)}
+          {block.content.length > 60 && '...'}
         </p>
       </div>
-      {section.section_type === 'image' && section.image_url && (
+
+      {block.block_type === 'image' && block.image_url && (
         <img
-          src={section.image_url}
-          alt={section.alt_text || ''}
-          className="h-12 w-16 object-cover rounded"
+          src={block.image_url}
+          alt={block.alt_text || ''}
+          className="h-8 w-12 object-cover rounded"
         />
       )}
-      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <Button
           type="button"
           size="icon"
           variant="ghost"
-          className="h-8 w-8"
-          onClick={() => onEdit(section)}
+          className="h-7 w-7"
+          onClick={() => onEdit(block)}
         >
-          <Pencil className="h-4 w-4" />
+          <Pencil className="h-3 w-3" />
         </Button>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-destructive">
-              <Trash2 className="h-4 w-4" />
+            <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-destructive">
+              <Trash2 className="h-3 w-3" />
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Supprimer cette section ?</AlertDialogTitle>
+              <AlertDialogTitle>Supprimer ce bloc ?</AlertDialogTitle>
               <AlertDialogDescription>Cette action est irréversible.</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Annuler</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => onDelete(section.id)}
+                onClick={() => onDelete(block.id)}
                 className="bg-destructive text-destructive-foreground"
               >
                 Supprimer
@@ -180,6 +197,308 @@ function SortableSectionItem({ section, onEdit, onDelete }: SortableSectionItemP
   );
 }
 
+// ============ COMPOSANT SECTION/CARTE ============
+
+interface SectionCardProps {
+  section: LessonSection;
+  onEditSection: (section: LessonSection) => void;
+  onDeleteSection: (id: string) => void;
+  onAddBlock: (sectionId: string) => void;
+  onEditBlock: (block: SectionBlock, sectionId: string) => void;
+  onDeleteBlock: (blockId: string) => void;
+  onReorderBlocks: (sectionId: string, blocks: SectionBlock[]) => void;
+}
+
+function SectionCard({
+  section,
+  onEditSection,
+  onDeleteSection,
+  onAddBlock,
+  onEditBlock,
+  onDeleteBlock,
+  onReorderBlocks,
+}: SectionCardProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: section.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleBlockDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id && section.blocks) {
+      const oldIndex = section.blocks.findIndex((b) => b.id === active.id);
+      const newIndex = section.blocks.findIndex((b) => b.id === over.id);
+      const reordered = arrayMove(section.blocks, oldIndex, newIndex);
+      onReorderBlocks(section.id, reordered);
+    }
+  };
+
+  const blocksCount = section.blocks?.length || 0;
+  const canAddMoreBlocks = blocksCount < MAX_BLOCKS_PER_SECTION;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="rounded-lg border bg-card overflow-hidden"
+    >
+      {/* Header de la section */}
+      <div className="flex items-center gap-3 p-4 bg-muted/30 border-b">
+        <button
+          type="button"
+          className="cursor-grab active:cursor-grabbing touch-none"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-5 w-5 text-muted-foreground" />
+        </button>
+
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <LayoutGrid className="h-4 w-4" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="font-medium truncate">
+            {section.title || `Section ${section.order_index}`}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {blocksCount} bloc{blocksCount > 1 ? 's' : ''} • Max {MAX_BLOCKS_PER_SECTION}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onAddBlock(section.id)}
+            disabled={!canAddMoreBlocks}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            Bloc
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            onClick={() => onEditSection(section)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-destructive">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Supprimer cette section ?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Cette action supprimera également tous les blocs de cette section.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => onDeleteSection(section.id)}
+                  className="bg-destructive text-destructive-foreground"
+                >
+                  Supprimer
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+        </div>
+      </div>
+
+      {/* Contenu (blocs) */}
+      {isExpanded && (
+        <div className="p-4">
+          {blocksCount === 0 ? (
+            <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
+              <p className="text-sm">Aucun bloc dans cette section</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => onAddBlock(section.id)}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Ajouter un bloc
+              </Button>
+            </div>
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleBlockDragEnd}
+            >
+              <SortableContext
+                items={section.blocks?.map((b) => b.id) || []}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-2">
+                  {section.blocks?.map((block) => (
+                    <SortableBlockItem
+                      key={block.id}
+                      block={block}
+                      onEdit={(b) => onEditBlock(b, section.id)}
+                      onDelete={onDeleteBlock}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ FORMULAIRE DE BLOC ============
+
+interface BlockFormProps {
+  form: BlockFormData;
+  setForm: (f: BlockFormData) => void;
+  conceptId: string;
+}
+
+function BlockForm({ form, setForm, conceptId }: BlockFormProps) {
+  return (
+    <div className="space-y-4 py-4">
+      <div className="space-y-2">
+        <Label>Type de bloc</Label>
+        <Select
+          value={form.block_type}
+          onValueChange={(v: BlockFormData['block_type']) =>
+            setForm({ ...form, block_type: v })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {blockTypes.map((type) => {
+              const Icon = type.icon;
+              return (
+                <SelectItem key={type.value} value={type.value}>
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1 rounded ${type.color}`}>
+                      <Icon className="h-3 w-3 text-white" />
+                    </div>
+                    {type.label}
+                  </div>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {form.block_type === 'image' ? (
+        <>
+          <ImageUpload
+            value={form.image_url}
+            onChange={(url) => setForm({ ...form, image_url: url })}
+            bucket="lesson-images"
+            folder={conceptId}
+            label="Image"
+            aspectRatio="video"
+            showUrlInput={true}
+          />
+          <div className="space-y-2">
+            <Label>Texte alternatif</Label>
+            <Input
+              value={form.alt_text || ''}
+              onChange={(e) => setForm({ ...form, alt_text: e.target.value })}
+              placeholder="Description de l'image pour l'accessibilité"
+            />
+          </div>
+          <RichTextEditor
+            value={form.content}
+            onChange={(value) => setForm({ ...form, content: value })}
+            label="Légende (optionnel)"
+            placeholder="Texte explicatif pour accompagner l'image..."
+            rows={3}
+            maxLength={MAX_CONTENT_LENGTH}
+          />
+        </>
+      ) : form.block_type === 'video' ? (
+        <>
+          <div className="space-y-2">
+            <Label>URL de la vidéo</Label>
+            <Input
+              value={form.video_url || ''}
+              onChange={(e) => setForm({ ...form, video_url: e.target.value })}
+              placeholder="https://youtube.com/watch?v=..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Supporte YouTube, Vimeo et les liens vidéo directs
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Input
+              value={form.alt_text || ''}
+              onChange={(e) => setForm({ ...form, alt_text: e.target.value })}
+              placeholder="Description de la vidéo"
+            />
+          </div>
+          <RichTextEditor
+            value={form.content}
+            onChange={(value) => setForm({ ...form, content: value })}
+            label="Texte associé (optionnel)"
+            placeholder="Texte explicatif pour accompagner la vidéo..."
+            rows={3}
+            maxLength={MAX_CONTENT_LENGTH}
+          />
+        </>
+      ) : (
+        <RichTextEditor
+          value={form.content}
+          onChange={(value) => setForm({ ...form, content: value })}
+          label="Contenu *"
+          placeholder={
+            form.block_type === 'tip'
+              ? 'Astuce ou conseil utile...'
+              : form.block_type === 'example'
+              ? 'Exemple concret ou cas pratique...'
+              : 'Contenu du bloc...'
+          }
+          rows={6}
+          maxLength={MAX_CONTENT_LENGTH}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============ COMPOSANT PRINCIPAL ============
+
 export function ConceptFormPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -189,7 +508,12 @@ export function ConceptFormPage() {
   const updateSection = useUpdateSection();
   const deleteSection = useDeleteSection();
   const reorderSections = useReorderSections();
+  const createBlock = useCreateBlock();
+  const updateBlock = useUpdateBlock();
+  const deleteBlock = useDeleteBlock();
+  const reorderBlocks = useReorderBlocks();
 
+  // États du concept
   const [introduction, setIntroduction] = useState('');
   const [summary, setSummary] = useState('');
   const [name, setName] = useState('');
@@ -197,12 +521,22 @@ export function ConceptFormPage() {
   const [orderIndex, setOrderIndex] = useState(1);
   const [difficulty, setDifficulty] = useState<1 | 2 | 3>(1);
   const [estimatedTime, setEstimatedTime] = useState(5);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+
+  // États des dialogs
+  const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
+  const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   const [editingSection, setEditingSection] = useState<LessonSection | null>(null);
+  const [editingBlock, setEditingBlock] = useState<SectionBlock | null>(null);
+  const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
+
+  // Formulaires
   const [sectionForm, setSectionForm] = useState<SectionFormData>({
-    section_type: 'text',
     order_index: 1,
     title: '',
+  });
+  const [blockForm, setBlockForm] = useState<BlockFormData>({
+    block_type: 'text',
+    order_index: 1,
     content: '',
     image_url: null,
     video_url: null,
@@ -210,10 +544,8 @@ export function ConceptFormPage() {
   });
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   useEffect(() => {
@@ -228,6 +560,8 @@ export function ConceptFormPage() {
     }
   }, [concept]);
 
+  // ============ HANDLERS CONCEPT ============
+
   const handleSave = async () => {
     if (!id) return;
     await updateConcept.mutateAsync({
@@ -240,38 +574,65 @@ export function ConceptFormPage() {
     if (!id) return;
     await updateConcept.mutateAsync({
       id,
-      data: { 
-        name, 
-        description, 
-        order_index: orderIndex, 
-        difficulty, 
-        estimated_time: estimatedTime 
-      },
-    });
-  };
-
-  const handleAddSection = async () => {
-    if (!id) return;
-    await createSection.mutateAsync({
-      conceptId: id,
       data: {
-        ...sectionForm,
-        order_index: (concept?.sections?.length || 0) + 1,
+        name,
+        description,
+        order_index: orderIndex,
+        difficulty,
+        estimated_time: estimatedTime,
       },
     });
-    setIsAddDialogOpen(false);
-    resetSectionForm();
   };
 
-  const handleEditSection = async () => {
-    if (!id || !editingSection) return;
-    await updateSection.mutateAsync({
-      id: editingSection.id,
-      conceptId: id,
-      data: sectionForm,
-    });
+  // ============ HANDLERS SECTIONS ============
+
+  const handleSectionDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id && concept?.sections) {
+      const oldIndex = concept.sections.findIndex((s) => s.id === active.id);
+      const newIndex = concept.sections.findIndex((s) => s.id === over.id);
+      const reordered = arrayMove(concept.sections, oldIndex, newIndex);
+      const updates = reordered.map((section, index) => ({
+        id: section.id,
+        order_index: index + 1,
+      }));
+      reorderSections.mutate({ conceptId: id!, sections: updates });
+    }
+  };
+
+  const openAddSectionDialog = () => {
     setEditingSection(null);
-    resetSectionForm();
+    setSectionForm({
+      order_index: (concept?.sections?.length || 0) + 1,
+      title: '',
+    });
+    setIsSectionDialogOpen(true);
+  };
+
+  const openEditSectionDialog = (section: LessonSection) => {
+    setEditingSection(section);
+    setSectionForm({
+      order_index: section.order_index,
+      title: section.title || '',
+    });
+    setIsSectionDialogOpen(true);
+  };
+
+  const handleSaveSection = async () => {
+    if (!id) return;
+    if (editingSection) {
+      await updateSection.mutateAsync({
+        id: editingSection.id,
+        conceptId: id,
+        data: sectionForm,
+      });
+    } else {
+      await createSection.mutateAsync({
+        conceptId: id,
+        data: sectionForm,
+      });
+    }
+    setIsSectionDialogOpen(false);
   };
 
   const handleDeleteSection = (sectionId: string) => {
@@ -279,47 +640,101 @@ export function ConceptFormPage() {
     deleteSection.mutate({ id: sectionId, conceptId: id });
   };
 
-  const resetSectionForm = () => {
-    setSectionForm({
-      section_type: 'text',
-      order_index: 1,
-      title: '',
+  // ============ HANDLERS BLOCS ============
+
+  const openAddBlockDialog = (sectionId: string) => {
+    const section = concept?.sections?.find((s) => s.id === sectionId);
+    const blocksCount = section?.blocks?.length || 0;
+
+    setEditingBlock(null);
+    setCurrentSectionId(sectionId);
+    setBlockForm({
+      block_type: 'text',
+      order_index: blocksCount + 1,
       content: '',
       image_url: null,
       video_url: null,
       alt_text: null,
     });
+    setIsBlockDialogOpen(true);
   };
 
-  const openEditDialog = (section: LessonSection) => {
-    setEditingSection(section);
-    setSectionForm({
-      section_type: section.section_type,
-      order_index: section.order_index,
-      title: section.title || '',
-      content: section.content,
-      image_url: section.image_url,
-      video_url: section.video_url,
-      alt_text: section.alt_text,
+  const openEditBlockDialog = (block: SectionBlock, sectionId: string) => {
+    setEditingBlock(block);
+    setCurrentSectionId(sectionId);
+    setBlockForm({
+      block_type: block.block_type,
+      order_index: block.order_index,
+      content: block.content,
+      image_url: block.image_url,
+      video_url: block.video_url,
+      alt_text: block.alt_text,
     });
+    setIsBlockDialogOpen(true);
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id && concept?.sections) {
-      const oldIndex = concept.sections.findIndex((s) => s.id === active.id);
-      const newIndex = concept.sections.findIndex((s) => s.id === over.id);
-
-      const reordered = arrayMove(concept.sections, oldIndex, newIndex);
-      const updates = reordered.map((section, index) => ({
-        id: section.id,
-        order_index: index + 1,
-      }));
-
-      reorderSections.mutate({ conceptId: id!, sections: updates });
+  const handleSaveBlock = async () => {
+    if (!id || !currentSectionId) return;
+    if (editingBlock) {
+      await updateBlock.mutateAsync({
+        id: editingBlock.id,
+        conceptId: id,
+        data: blockForm,
+      });
+    } else {
+      await createBlock.mutateAsync({
+        sectionId: currentSectionId,
+        conceptId: id,
+        data: blockForm,
+      });
     }
+    setIsBlockDialogOpen(false);
   };
+
+  const handleDeleteBlock = (blockId: string) => {
+    if (!id) return;
+    deleteBlock.mutate({ id: blockId, conceptId: id });
+  };
+
+  const handleReorderBlocks = (_sectionId: string, blocks: SectionBlock[]) => {
+    if (!id) return;
+    const updates = blocks.map((block, index) => ({
+      id: block.id,
+      order_index: index + 1,
+    }));
+    reorderBlocks.mutate({ conceptId: id, blocks: updates });
+  };
+
+  // ============ CALCUL TEMPS ESTIMÉ ============
+
+  const calculateEstimatedTime = () => {
+    let totalMinutes = 0;
+    const WORDS_PER_MINUTE = 200;
+
+    // Introduction
+    if (introduction) {
+      totalMinutes += introduction.split(/\s+/).length / WORDS_PER_MINUTE;
+    }
+
+    // Blocs
+    concept?.sections?.forEach((section) => {
+      section.blocks?.forEach((block) => {
+        const words = block.content?.split(/\s+/).length || 0;
+        totalMinutes += words / WORDS_PER_MINUTE;
+        if (block.block_type === 'image') totalMinutes += 0.25;
+        if (block.block_type === 'video') totalMinutes += 0.5;
+      });
+    });
+
+    // Résumé
+    if (summary) {
+      totalMinutes += summary.split(/\s+/).length / WORDS_PER_MINUTE;
+    }
+
+    return Math.max(1, Math.ceil(totalMinutes));
+  };
+
+  // ============ RENDU ============
 
   if (isLoading) {
     return (
@@ -336,6 +751,7 @@ export function ConceptFormPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate(`/games/${concept.game_id}`)}>
@@ -359,7 +775,9 @@ export function ConceptFormPage() {
           <TabsTrigger value="settings">Paramètres</TabsTrigger>
         </TabsList>
 
+        {/* ============ ONGLET CONTENU ============ */}
         <TabsContent value="content" className="space-y-6">
+          {/* Introduction */}
           <Card>
             <CardHeader>
               <CardTitle>Introduction</CardTitle>
@@ -374,36 +792,53 @@ export function ConceptFormPage() {
             </CardContent>
           </Card>
 
+          {/* Sections */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Sections ({concept.sections?.length || 0})</CardTitle>
-              <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>
+              <div>
+                <CardTitle>Sections / Cartes ({concept.sections?.length || 0})</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Chaque section représente une carte dans l'app mobile
+                </p>
+              </div>
+              <Button size="sm" onClick={openAddSectionDialog}>
                 <Plus className="h-4 w-4 mr-2" />
-                Ajouter
+                Nouvelle section
               </Button>
             </CardHeader>
             <CardContent>
               {concept.sections?.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Aucune section. Cliquez sur "Ajouter" pour créer du contenu.
+                <div className="text-center py-12 border-2 border-dashed rounded-lg">
+                  <LayoutGrid className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                  <p className="text-muted-foreground mb-4">
+                    Aucune section. Créez des sections pour organiser votre contenu.
+                  </p>
+                  <Button size="sm" onClick={openAddSectionDialog}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Créer la première section
+                  </Button>
                 </div>
               ) : (
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
+                  onDragEnd={handleSectionDragEnd}
                 >
                   <SortableContext
                     items={concept.sections?.map((s) => s.id) || []}
                     strategy={verticalListSortingStrategy}
                   >
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                       {concept.sections?.map((section) => (
-                        <SortableSectionItem
+                        <SectionCard
                           key={section.id}
                           section={section}
-                          onEdit={openEditDialog}
-                          onDelete={handleDeleteSection}
+                          onEditSection={openEditSectionDialog}
+                          onDeleteSection={handleDeleteSection}
+                          onAddBlock={openAddBlockDialog}
+                          onEditBlock={openEditBlockDialog}
+                          onDeleteBlock={handleDeleteBlock}
+                          onReorderBlocks={handleReorderBlocks}
                         />
                       ))}
                     </div>
@@ -413,6 +848,7 @@ export function ConceptFormPage() {
             </CardContent>
           </Card>
 
+          {/* Résumé */}
           <Card>
             <CardHeader>
               <CardTitle>Résumé</CardTitle>
@@ -428,10 +864,12 @@ export function ConceptFormPage() {
           </Card>
         </TabsContent>
 
+        {/* ============ ONGLET QUIZ ============ */}
         <TabsContent value="quiz">
           <QuizEditor conceptId={id!} />
         </TabsContent>
 
+        {/* ============ ONGLET PARAMÈTRES ============ */}
         <TabsContent value="settings">
           <Card>
             <CardHeader>
@@ -441,17 +879,17 @@ export function ConceptFormPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Nom du concept</Label>
-                  <Input 
-                    value={name} 
+                  <Input
+                    value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Nom du concept"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Ordre d'affichage</Label>
-                  <Input 
-                    type="number" 
-                    value={orderIndex} 
+                  <Input
+                    type="number"
+                    value={orderIndex}
                     onChange={(e) => setOrderIndex(parseInt(e.target.value) || 1)}
                     min={1}
                   />
@@ -459,8 +897,8 @@ export function ConceptFormPage() {
               </div>
               <div className="space-y-2">
                 <Label>Description</Label>
-                <Textarea 
-                  value={description} 
+                <Textarea
+                  value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Description du concept"
                   rows={2}
@@ -470,9 +908,9 @@ export function ConceptFormPage() {
                 <div className="space-y-2">
                   <Label>Durée estimée (minutes)</Label>
                   <div className="flex gap-2">
-                    <Input 
-                      type="number" 
-                      value={estimatedTime} 
+                    <Input
+                      type="number"
+                      value={estimatedTime}
                       onChange={(e) => setEstimatedTime(parseInt(e.target.value) || 1)}
                       min={1}
                       className="flex-1"
@@ -481,30 +919,21 @@ export function ConceptFormPage() {
                       type="button"
                       variant="outline"
                       size="icon"
-                      onClick={() => {
-                        const calculatedTime = calculateEstimatedTime(
-                          concept?.sections || [],
-                          introduction,
-                          summary
-                        );
-                        setEstimatedTime(calculatedTime);
-                      }}
+                      onClick={() => setEstimatedTime(calculateEstimatedTime())}
                       title="Calculer automatiquement"
                     >
                       <RefreshCw className="h-4 w-4" />
                     </Button>
                   </div>
-                  {concept?.sections && concept.sections.length > 0 && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      Temps calculé : {calculateEstimatedTime(concept.sections, introduction, summary)} min
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Temps calculé : {calculateEstimatedTime()} min
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Difficulté</Label>
-                  <Select 
-                    value={String(difficulty)} 
+                  <Select
+                    value={String(difficulty)}
                     onValueChange={(v) => setDifficulty(parseInt(v) as 1 | 2 | 3)}
                   >
                     <SelectTrigger>
@@ -529,169 +958,69 @@ export function ConceptFormPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Add Section Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/* ============ DIALOG SECTION ============ */}
+      <Dialog open={isSectionDialogOpen} onOpenChange={setIsSectionDialogOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nouvelle section</DialogTitle>
+            <DialogTitle>
+              {editingSection ? 'Modifier la section' : 'Nouvelle section'}
+            </DialogTitle>
           </DialogHeader>
-          <SectionForm form={sectionForm} setForm={setSectionForm} conceptId={id!} />
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Titre de la section (optionnel)</Label>
+              <Input
+                value={sectionForm.title || ''}
+                onChange={(e) => setSectionForm({ ...sectionForm, title: e.target.value })}
+                placeholder="Ex: Mise en place, Tour de jeu..."
+              />
+              <p className="text-xs text-muted-foreground">
+                Ce titre apparaîtra en haut de la carte dans l'application
+              </p>
+            </div>
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsSectionDialogOpen(false)}>
               Annuler
             </Button>
-            <Button onClick={handleAddSection} disabled={createSection.isPending}>
-              Créer
+            <Button
+              onClick={handleSaveSection}
+              disabled={createSection.isPending || updateSection.isPending}
+            >
+              {editingSection ? 'Enregistrer' : 'Créer'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Section Dialog */}
-      <Dialog open={!!editingSection} onOpenChange={(open) => !open && setEditingSection(null)}>
+      {/* ============ DIALOG BLOC ============ */}
+      <Dialog open={isBlockDialogOpen} onOpenChange={setIsBlockDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Modifier la section</DialogTitle>
+            <DialogTitle>
+              {editingBlock ? 'Modifier le bloc' : 'Nouveau bloc'}
+            </DialogTitle>
           </DialogHeader>
-          <SectionForm form={sectionForm} setForm={setSectionForm} conceptId={id!} />
+          <BlockForm form={blockForm} setForm={setBlockForm} conceptId={id!} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingSection(null)}>
+            <Button variant="outline" onClick={() => setIsBlockDialogOpen(false)}>
               Annuler
             </Button>
-            <Button onClick={handleEditSection} disabled={updateSection.isPending}>
-              Enregistrer
+            <Button
+              onClick={handleSaveBlock}
+              disabled={
+                createBlock.isPending ||
+                updateBlock.isPending ||
+                (blockForm.block_type !== 'image' &&
+                  blockForm.block_type !== 'video' &&
+                  !blockForm.content)
+              }
+            >
+              {editingBlock ? 'Enregistrer' : 'Créer'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-interface SectionFormProps {
-  form: SectionFormData;
-  setForm: (f: SectionFormData) => void;
-  conceptId: string;
-}
-
-function SectionForm({ form, setForm, conceptId }: SectionFormProps) {
-  return (
-    <div className="space-y-4 py-4">
-      <div className="space-y-2">
-        <Label>Type de section</Label>
-        <Select
-          value={form.section_type}
-          onValueChange={(v: SectionFormData['section_type']) =>
-            setForm({ ...form, section_type: v })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {sectionTypes.map((type) => {
-              const Icon = type.icon;
-              return (
-                <SelectItem key={type.value} value={type.value}>
-                  <div className="flex items-center gap-2">
-                    <div className={`p-1 rounded ${type.color}`}>
-                      <Icon className="h-3 w-3 text-white" />
-                    </div>
-                    {type.label}
-                  </div>
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Titre (optionnel)</Label>
-        <Input
-          value={form.title || ''}
-          onChange={(e) => setForm({ ...form, title: e.target.value })}
-          placeholder="Titre de la section"
-        />
-      </div>
-
-      {form.section_type === 'image' ? (
-        <>
-          <ImageUpload
-            value={form.image_url}
-            onChange={(url) => setForm({ ...form, image_url: url })}
-            bucket="lesson-images"
-            folder={conceptId}
-            label="Image"
-            aspectRatio="video"
-            showUrlInput={true}
-          />
-          <div className="space-y-2">
-            <Label>Texte alternatif</Label>
-            <Input
-              value={form.alt_text || ''}
-              onChange={(e) => setForm({ ...form, alt_text: e.target.value })}
-              placeholder="Description de l'image pour l'accessibilité"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Légende / Contenu associé</Label>
-            <Textarea
-              value={form.content}
-              onChange={(e) => setForm({ ...form, content: e.target.value })}
-              rows={3}
-              placeholder="Texte explicatif pour accompagner l'image..."
-            />
-          </div>
-        </>
-      ) : form.section_type === 'video' ? (
-        <>
-          <div className="space-y-2">
-            <Label>URL de la vidéo</Label>
-            <Input
-              value={form.video_url || ''}
-              onChange={(e) => setForm({ ...form, video_url: e.target.value })}
-              placeholder="https://youtube.com/watch?v=..."
-            />
-            <p className="text-xs text-muted-foreground">
-              Supporte YouTube, Vimeo et les liens vidéo directs
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label>Texte alternatif</Label>
-            <Input
-              value={form.alt_text || ''}
-              onChange={(e) => setForm({ ...form, alt_text: e.target.value })}
-              placeholder="Description de la vidéo"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Contenu associé</Label>
-            <Textarea
-              value={form.content}
-              onChange={(e) => setForm({ ...form, content: e.target.value })}
-              rows={3}
-              placeholder="Texte explicatif pour accompagner la vidéo..."
-            />
-          </div>
-        </>
-      ) : (
-        <div className="space-y-2">
-          <Label>Contenu *</Label>
-          <Textarea
-            value={form.content}
-            onChange={(e) => setForm({ ...form, content: e.target.value })}
-            rows={8}
-            placeholder={
-              form.section_type === 'tip'
-                ? 'Astuce ou conseil utile...'
-                : form.section_type === 'example'
-                ? 'Exemple concret ou cas pratique...'
-                : 'Contenu de la section...'
-            }
-          />
-        </div>
-      )}
     </div>
   );
 }

@@ -25,7 +25,7 @@ function countWords(text: string): number {
 
 /**
  * Calcule le temps de lecture estimé en minutes pour un concept
- * basé sur le contenu de ses sections.
+ * basé sur le contenu de ses sections et blocs.
  * 
  * Paramètres de calcul :
  * - Texte : ~200 mots/minute (vitesse de lecture moyenne)
@@ -41,7 +41,7 @@ export function calculateEstimatedTime(
   summary?: string
 ): number {
   const WORDS_PER_MINUTE = 200;
-  const IMAGE_TIME_MINUTES = 0.10; // 15 secondes
+  const IMAGE_TIME_MINUTES = 0.25; // 15 secondes
   const VIDEO_TIME_MINUTES = 0.5;  // 30 secondes
   const TIP_EXTRA_TIME = 0.17;     // 10 secondes de réflexion
   const EXAMPLE_EXTRA_TIME = 0.25; // 15 secondes d'analyse
@@ -54,36 +54,46 @@ export function calculateEstimatedTime(
     totalMinutes += introWords / WORDS_PER_MINUTE;
   }
 
-  // Temps pour chaque section
+  // Temps pour chaque section et ses blocs
   for (const section of sections) {
-    // Temps de lecture du contenu texte
-    const contentWords = countWords(section.content);
-    const titleWords = countWords(section.title || '');
-    const textMinutes = (contentWords + titleWords) / WORDS_PER_MINUTE;
+    // Temps pour le titre de la section
+    if (section.title) {
+      const titleWords = countWords(section.title);
+      totalMinutes += titleWords / WORDS_PER_MINUTE;
+    }
 
-    switch (section.section_type) {
-      case 'text':
-        totalMinutes += textMinutes;
-        break;
-      
-      case 'image':
-        totalMinutes += textMinutes + IMAGE_TIME_MINUTES;
-        break;
-      
-      case 'video':
-        totalMinutes += textMinutes + VIDEO_TIME_MINUTES;
-        break;
-      
-      case 'tip':
-        totalMinutes += textMinutes + TIP_EXTRA_TIME;
-        break;
-      
-      case 'example':
-        totalMinutes += textMinutes + EXAMPLE_EXTRA_TIME;
-        break;
-      
-      default:
-        totalMinutes += textMinutes;
+    // Temps pour chaque bloc dans la section
+    if (section.blocks) {
+      for (const block of section.blocks) {
+        // Temps de lecture du contenu texte
+        const contentWords = countWords(block.content);
+        const textMinutes = contentWords / WORDS_PER_MINUTE;
+
+        switch (block.block_type) {
+          case 'text':
+            totalMinutes += textMinutes;
+            break;
+          
+          case 'image':
+            totalMinutes += textMinutes + IMAGE_TIME_MINUTES;
+            break;
+          
+          case 'video':
+            totalMinutes += textMinutes + VIDEO_TIME_MINUTES;
+            break;
+          
+          case 'tip':
+            totalMinutes += textMinutes + TIP_EXTRA_TIME;
+            break;
+          
+          case 'example':
+            totalMinutes += textMinutes + EXAMPLE_EXTRA_TIME;
+            break;
+          
+          default:
+            totalMinutes += textMinutes;
+        }
+      }
     }
   }
 

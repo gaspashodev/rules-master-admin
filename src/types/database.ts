@@ -47,18 +47,31 @@ export interface ConceptWithSections extends Concept {
   sections: LessonSection[];
 }
 
+// ============ NOUVELLE ARCHITECTURE SECTION/BLOCS ============
+
 export interface LessonSection {
   id: string;
   concept_id: string;
-  section_type: 'text' | 'image' | 'video' | 'tip' | 'example';
   order_index: number;
   title: string | null;
+  created_at: string;
+  // Blocs chargés via jointure
+  blocks?: SectionBlock[];
+}
+
+export interface SectionBlock {
+  id: string;
+  section_id: string;
+  block_type: 'text' | 'image' | 'video' | 'tip' | 'example';
+  order_index: number;
   content: string;
   image_url: string | null;
   video_url: string | null;
   alt_text: string | null;
   created_at: string;
 }
+
+// ============ FIN NOUVELLE ARCHITECTURE ============
 
 export interface Quiz {
   id: string;
@@ -114,15 +127,23 @@ export interface ConceptFormData {
   summary: string;
 }
 
+// ============ NOUVEAUX FORM DATA POUR SECTIONS/BLOCS ============
+
 export interface SectionFormData {
-  section_type: 'text' | 'image' | 'video' | 'tip' | 'example';
   order_index: number;
   title: string | null;
+}
+
+export interface BlockFormData {
+  block_type: 'text' | 'image' | 'video' | 'tip' | 'example';
+  order_index: number;
   content: string;
   image_url: string | null;
   video_url: string | null;
   alt_text: string | null;
 }
+
+// ============ FIN NOUVEAUX FORM DATA ============
 
 export interface QuizQuestionFormData {
   question: string;

@@ -29,12 +29,9 @@ export function useCreateQuiz() {
 
   return useMutation({
     mutationFn: async (conceptId: string): Promise<Quiz> => {
-      // ID lisible basé sur le concept
-      const id = `${conceptId}-quiz`;
-
       const { data: quiz, error } = await supabase
         .from('quizzes')
-        .insert([{ id, concept_id: conceptId }])
+        .insert([{ concept_id: conceptId }])
         .select()
         .single();
 
@@ -100,12 +97,9 @@ export function useCreateQuizQuestion() {
 
   return useMutation({
     mutationFn: async ({ quizId, data }: { quizId: string; data: QuizQuestionFormData }): Promise<QuizQuestion> => {
-      // ID lisible basé sur le quiz et l'ordre
-      const id = `${quizId}-q${data.order_index}`;
-
       const { data: question, error } = await supabase
         .from('quiz_questions')
-        .insert([{ id, quiz_id: quizId, ...data }])
+        .insert([{ quiz_id: quizId, ...data }])
         .select()
         .single();
 

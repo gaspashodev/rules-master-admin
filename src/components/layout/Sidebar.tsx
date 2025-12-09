@@ -3,8 +3,6 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
   Gamepad2,
-  BookOpen,
-  HelpCircle,
   Settings,
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
@@ -12,8 +10,6 @@ import { Separator } from '@/components/ui/separator';
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Jeux', href: '/games', icon: Gamepad2 },
-  { name: 'Concepts', href: '/concepts', icon: BookOpen },
-  { name: 'Quiz', href: '/quizzes', icon: HelpCircle },
 ];
 
 const secondaryNavigation = [
