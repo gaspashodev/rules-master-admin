@@ -42,6 +42,7 @@ import {
   useReorderBlocks,
 } from '@/hooks/useConcepts';
 import { QuizEditor } from '@/components/quiz/QuizEditor';
+import { MobilePreview } from '@/components/preview/MobilePreview';
 import type { SectionFormData, BlockFormData, LessonSection, SectionBlock } from '@/types/database';
 import {
   ArrowLeft,
@@ -60,6 +61,7 @@ import {
   ChevronDown,
   ChevronUp,
   LayoutGrid,
+  Smartphone,
 } from 'lucide-react';
 
 import {
@@ -207,6 +209,7 @@ interface SectionCardProps {
   onEditBlock: (block: SectionBlock, sectionId: string) => void;
   onDeleteBlock: (blockId: string) => void;
   onReorderBlocks: (sectionId: string, blocks: SectionBlock[]) => void;
+  onPreview: (section: LessonSection) => void;
 }
 
 function SectionCard({
@@ -217,6 +220,7 @@ function SectionCard({
   onEditBlock,
   onDeleteBlock,
   onReorderBlocks,
+  onPreview,
 }: SectionCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -287,6 +291,16 @@ function SectionCard({
           >
             <Plus className="h-3 w-3 mr-1" />
             Bloc
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onPreview(section)}
+            title="Prévisualiser sur mobile"
+          >
+            <Smartphone className="h-3 w-3 mr-1" />
+            Aperçu
           </Button>
           <Button
             type="button"
@@ -528,6 +542,10 @@ export function ConceptFormPage() {
   const [editingSection, setEditingSection] = useState<LessonSection | null>(null);
   const [editingBlock, setEditingBlock] = useState<SectionBlock | null>(null);
   const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
+
+  // État de prévisualisation mobile
+  const [previewSection, setPreviewSection] = useState<(LessonSection & { blocks: SectionBlock[] }) | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // Formulaires
   const [sectionForm, setSectionForm] = useState<SectionFormData>({
@@ -839,6 +857,10 @@ export function ConceptFormPage() {
                           onEditBlock={openEditBlockDialog}
                           onDeleteBlock={handleDeleteBlock}
                           onReorderBlocks={handleReorderBlocks}
+                          onPreview={(s) => {
+                            setPreviewSection(s as LessonSection & { blocks: SectionBlock[] });
+                            setIsPreviewOpen(true);
+                          }}
                         />
                       ))}
                     </div>
@@ -1021,6 +1043,18 @@ export function ConceptFormPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de prévisualisation mobile */}
+      {previewSection && (
+        <MobilePreview
+          open={isPreviewOpen}
+          onOpenChange={setIsPreviewOpen}
+          conceptName={name || concept?.name || 'Concept'}
+          section={previewSection}
+          introduction={introduction}
+          summary={summary}
+        />
+      )}
     </div>
   );
 }

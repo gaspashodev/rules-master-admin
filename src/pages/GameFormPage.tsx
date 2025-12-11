@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { BarcodesEditor } from '@/components/games/BarcodesEditor';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -41,7 +42,6 @@ export function GameFormPage() {
       bgg_rating: null,
       bgg_url: null,
       cover_image_url: null,
-      barcode: null,
       affiliate_url: null,
       published: false,
       featured: false,
@@ -75,7 +75,6 @@ export function GameFormPage() {
         bgg_rating: game.bgg_rating,
         bgg_url: game.bgg_url,
         cover_image_url: game.cover_image_url,
-        barcode: game.barcode,
         affiliate_url: game.affiliate_url,
         published: game.published,
         featured: game.featured,
@@ -139,6 +138,7 @@ export function GameFormPage() {
             <TabsTrigger value="info">Informations</TabsTrigger>
             <TabsTrigger value="concepts">Concepts</TabsTrigger>
             <TabsTrigger value="resources">Ressources</TabsTrigger>
+            <TabsTrigger value="barcodes">Codes-barres</TabsTrigger>
           </TabsList>
           <TabsContent value="info">
             <FormFields
@@ -157,6 +157,9 @@ export function GameFormPage() {
           </TabsContent>
           <TabsContent value="resources">
             <ResourcesEditor gameId={id!} />
+          </TabsContent>
+          <TabsContent value="barcodes">
+            <BarcodesEditor gameId={id!} />
           </TabsContent>
         </Tabs>
       ) : (
@@ -299,17 +302,6 @@ function FormFields({
             <CardTitle>Liens & Identification</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Code-barres (EAN-13)</Label>
-              <Input
-                {...register('barcode')}
-                placeholder="3760146642348"
-                maxLength={13}
-              />
-              <p className="text-xs text-muted-foreground">
-                Pour le scan de boîte dans l'application
-              </p>
-            </div>
             <div className="space-y-2">
               <Label>URL BoardGameGeek</Label>
               <Input {...register('bgg_url')} placeholder="https://boardgamegeek.com/..." />

@@ -50,7 +50,7 @@ interface ConceptsListProps {
   gameId: string;
 }
 
-function SortableConceptItem({ concept, gameId, onDelete, onNavigate }: { 
+function SortableConceptItem({ concept, onDelete, onNavigate }: { 
   concept: Concept; 
   gameId: string;
   onDelete: (id: string) => void;

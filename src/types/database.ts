@@ -14,7 +14,6 @@ export interface Game {
   bgg_rating: number | null;
   bgg_url: string | null;
   cover_image_url: string | null;
-  barcode: string | null;
   affiliate_url: string | null;
   published: boolean;
   featured: boolean;
@@ -111,7 +110,6 @@ export interface GameFormData {
   bgg_rating: number | null;
   bgg_url: string | null;
   cover_image_url: string | null;
-  barcode: string | null;
   affiliate_url: string | null;
   published: boolean;
   featured: boolean;
@@ -197,4 +195,19 @@ export interface GameRuleFormData {
   pdf_url: string;
   language: string;
   order_index: number;
+}
+
+// ============ GAME BARCODES ============
+
+export interface GameBarcode {
+  id: string;
+  game_id: string;
+  barcode: string;
+  edition: string | null;
+  created_at: string;
+}
+
+export interface GameBarcodeFormData {
+  barcode: string;
+  edition: string | null;
 }
