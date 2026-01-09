@@ -41,7 +41,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useConcepts, useCreateConcept, useDeleteConcept, useReorderConcepts } from '@/hooks/useConcepts';
 import { Plus, GripVertical, Clock, ChevronRight, Trash2, BookOpen } from 'lucide-react';
 import type { ConceptFormData, Concept } from '@/types/database';
@@ -99,7 +98,6 @@ function SortableConceptItem({ concept, onDelete, onNavigate }: {
           <Clock className="h-4 w-4" />
           {concept.estimated_time} min
         </span>
-        <span>{'★'.repeat(concept.difficulty)}{'☆'.repeat(3 - concept.difficulty)}</span>
       </div>
 
       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -153,7 +151,6 @@ export function ConceptsList({ gameId }: ConceptsListProps) {
     name: '',
     description: '',
     order_index: 1,
-    difficulty: 1,
     estimated_time: 5,
     introduction: '',
     summary: '',
@@ -200,7 +197,6 @@ export function ConceptsList({ gameId }: ConceptsListProps) {
       name: '',
       description: '',
       order_index: 1,
-      difficulty: 1,
       estimated_time: 5,
       introduction: '',
       summary: '',
@@ -256,22 +252,6 @@ export function ConceptsList({ gameId }: ConceptsListProps) {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Objectif et déroulement"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label>Difficulté</Label>
-                <Select
-                  value={String(formData.difficulty)}
-                  onValueChange={(v) => setFormData({ ...formData, difficulty: parseInt(v) as 1 | 2 | 3 })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">★☆☆ Facile</SelectItem>
-                    <SelectItem value="2">★★☆ Moyen</SelectItem>
-                    <SelectItem value="3">★★★ Difficile</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
               <div className="space-y-2">
                 <Label>Introduction</Label>

@@ -533,7 +533,6 @@ export function ConceptFormPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [orderIndex, setOrderIndex] = useState(1);
-  const [difficulty, setDifficulty] = useState<1 | 2 | 3>(1);
   const [estimatedTime, setEstimatedTime] = useState(5);
 
   // États des dialogs
@@ -573,7 +572,6 @@ export function ConceptFormPage() {
       setName(concept.name || '');
       setDescription(concept.description || '');
       setOrderIndex(concept.order_index || 1);
-      setDifficulty(concept.difficulty || 1);
       setEstimatedTime(concept.estimated_time || 5);
     }
   }, [concept]);
@@ -596,7 +594,6 @@ export function ConceptFormPage() {
         name,
         description,
         order_index: orderIndex,
-        difficulty,
         estimated_time: estimatedTime,
       },
     });
@@ -951,22 +948,6 @@ export function ConceptFormPage() {
                     <Clock className="h-3 w-3" />
                     Temps calculé : {calculateEstimatedTime()} min
                   </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Difficulté</Label>
-                  <Select
-                    value={String(difficulty)}
-                    onValueChange={(v) => setDifficulty(parseInt(v) as 1 | 2 | 3)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">★☆☆ Facile</SelectItem>
-                      <SelectItem value="2">★★☆ Moyen</SelectItem>
-                      <SelectItem value="3">★★★ Difficile</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
               <div className="flex justify-end pt-4">

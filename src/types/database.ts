@@ -34,7 +34,6 @@ export interface Concept {
   name: string;
   description: string;
   order_index: number;
-  difficulty: 1 | 2 | 3;
   estimated_time: number;
   introduction: string;
   summary: string;
@@ -119,7 +118,6 @@ export interface ConceptFormData {
   name: string;
   description: string;
   order_index: number;
-  difficulty: 1 | 2 | 3;
   estimated_time: number;
   introduction: string;
   summary: string;
