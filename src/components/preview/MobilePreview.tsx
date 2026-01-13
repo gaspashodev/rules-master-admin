@@ -290,7 +290,13 @@ function getBlockListItems(block: SectionBlock): ListItemsMetadata {
 }
 
 function getBlockFloatingImage(block: SectionBlock): FloatingImageMetadata {
-  return (block.metadata as FloatingImageMetadata) || { position: 'bottom-right', height: 50 };
+  const meta = block.metadata as FloatingImageMetadata | null;
+  return {
+    position: meta?.position || 'bottom-right',
+    height: meta?.height || 50,
+    bleed: meta?.bleed || 0,
+    fade: meta?.fade || 0,
+  };
 }
 
 function getBlockHeading(block: SectionBlock): { text: string; emoji?: string } {
@@ -464,26 +470,47 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
     
     if (!block.image_url) return null;
 
+    // Calculer la hauteur en pixels (basé sur un conteneur de ~400px)
+    const heightPx = Math.min(150, Math.round(400 * floatData.height / 100));
+    const hasBleed = floatData.bleed && floatData.bleed > 0;
+    const hasFade = floatData.fade && floatData.fade > 0;
+    const isRight = floatData.position.includes('right');
+    const opacity = hasFade ? (100 - floatData.fade!) / 100 : 1;
+
+    const positionLabel = {
+      'top-left': 'haut gauche',
+      'top-right': 'haut droite',
+      'bottom-left': 'bas gauche',
+      'bottom-right': 'bas droite',
+    }[floatData.position];
+
+    // Construire les infos supplémentaires
+    const extras: string[] = [];
+    if (hasBleed) extras.push(`fond perdu ${floatData.bleed}%`);
+    if (hasFade) extras.push(`fondu ${floatData.fade}%`);
+
     return (
-      <div className="mb-3 relative">
+      <div className="mb-3" style={hasBleed ? { marginLeft: `-${floatData.bleed}%`, marginRight: `-${floatData.bleed}%` } : undefined}>
         <div 
           className={cn(
-            "absolute bottom-0",
-            floatData.position === 'bottom-right' ? 'right-0' : 'left-0'
+            "flex",
+            isRight ? 'justify-end' : 'justify-start'
           )}
-          style={{ height: `${floatData.height}%`, maxHeight: '150px' }}
         >
           <img
             src={block.image_url}
             alt=""
-            className="h-full w-auto object-contain animate-pulse"
+            className="object-contain animate-pulse"
             style={{ 
+              height: `${heightPx}px`,
+              maxHeight: '150px',
               filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))',
+              opacity,
             }}
           />
         </div>
-        <p className="text-[10px] text-center" style={{ color: colors.textTertiary }}>
-          ↑ Image flottante (animée dans l'app)
+        <p className="text-[10px] text-center mt-1" style={{ color: colors.textTertiary, paddingLeft: hasBleed ? `${floatData.bleed}%` : 0, paddingRight: hasBleed ? `${floatData.bleed}%` : 0 }}>
+          ↑ Image flottante ({positionLabel}){extras.length > 0 ? ` — ${extras.join(', ')}` : ''} — animée dans l'app
         </p>
       </div>
     );
@@ -561,7 +588,7 @@ function CardPreview({ conceptName, title, blocks, colors, theme }: CardPreviewP
 
   return (
     <div
-      className="flex-1 rounded-[20px] border overflow-hidden"
+      className="h-full rounded-[20px] border flex flex-col overflow-hidden"
       style={{ 
         borderColor: colors.cardBorder,
         backgroundColor: colors.cardBackground,
@@ -570,11 +597,17 @@ function CardPreview({ conceptName, title, blocks, colors, theme }: CardPreviewP
       {/* Simule le BlurView + Gradient */}
       <div 
         className={cn(
-          "h-full bg-gradient-to-b backdrop-blur-sm",
+          "flex-1 bg-gradient-to-b backdrop-blur-sm overflow-hidden",
           gradientColors
         )}
       >
-        <div className="p-5 pb-6 h-full overflow-y-auto">
+        <div 
+          className="p-5 pb-6 h-full overflow-y-auto scrollbar-thin"
+          style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: `${colors.textTertiary} transparent`,
+          }}
+        >
           {/* Badge du concept */}
           <div className="flex justify-start items-center mb-4">
             <div
@@ -635,8 +668,8 @@ function IPhoneFrame({ children, theme }: IPhoneFrameProps) {
         {/* Dynamic Island / Notch */}
         <div className="absolute top-2 left-1/2 -translate-x-1/2 w-[110px] h-[32px] bg-black rounded-full z-20" />
         
-        {/* Contenu */}
-        <div className="absolute inset-0 pt-11 pb-5 px-0 flex flex-col">
+        {/* Contenu - flex column avec min-h-0 pour permettre le scroll */}
+        <div className="absolute inset-0 pt-11 pb-5 px-0 flex flex-col min-h-0">
           {children}
         </div>
 
@@ -822,8 +855,8 @@ export function MobilePreview({
               colors={colors}
             />
 
-            {/* Card Container */}
-            <div className="flex-1 px-4 min-h-0">
+            {/* Card Container - flex-1 + overflow-hidden pour le scroll */}
+            <div className="flex-1 px-4 overflow-hidden">
               <CardPreview
                 conceptName={conceptName}
                 title={section.title}

@@ -123,8 +123,10 @@ export interface ListItem {
 
 // Pour block_type: 'floating_image' - position/height dans metadata, URL dans image_url
 export interface FloatingImageMetadata {
-  position: 'bottom-right' | 'bottom-left';
+  position: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
   height: number;      // Pourcentage de la hauteur d'écran (ex: 50 = moitié)
+  bleed?: number;      // Fond perdu en % (0 = désactivé, 10 = dépasse de 10%)
+  fade?: number;       // Fondu/opacité en % (0 = opaque, 50 = semi-transparent)
 }
 
 // Pour block_type: 'quote' - tout dans content, pas de metadata

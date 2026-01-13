@@ -125,7 +125,13 @@ function getBlockListItems(block: SectionBlock): ListItemsMetadata {
 }
 
 function getBlockFloatingImage(block: SectionBlock): FloatingImageMetadata {
-  return (block.metadata as FloatingImageMetadata) || { position: 'bottom-right', height: 50 };
+  const meta = block.metadata as FloatingImageMetadata | null;
+  return {
+    position: meta?.position || 'bottom-right',
+    height: meta?.height || 50,
+    bleed: meta?.bleed || 0,
+    fade: meta?.fade || 0,
+  };
 }
 
 function getBlockHeading(block: SectionBlock): { text: string; emoji?: string } {
@@ -297,135 +303,53 @@ interface ComplexBlockPreviewProps {
 function ComplexBlockPreview({ block, onClick }: ComplexBlockPreviewProps) {
   const config = getBlockConfig(block.block_type);
 
-  const renderPreview = () => {
+  // Affichage minimaliste - juste le type et un indicateur
+  const getQuickInfo = () => {
     switch (block.block_type) {
       case 'image':
-        return (
-          <div className="flex items-center gap-3">
-            {block.image_url ? (
-              <img
-                src={block.image_url}
-                alt={block.alt_text || ''}
-                className="h-16 w-24 object-cover rounded"
-              />
-            ) : (
-              <div className="h-16 w-24 bg-muted rounded flex items-center justify-center">
-                <Image className="h-6 w-6 text-muted-foreground" />
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm truncate">{block.alt_text || 'Image sans description'}</p>
-              {block.content && (
-                <p className="text-xs text-muted-foreground truncate">{block.content}</p>
-              )}
-            </div>
-          </div>
-        );
-
+        return block.image_url ? '✓ Image configurée' : 'Aucune image';
       case 'video':
-        return (
-          <div className="flex items-center gap-3">
-            <div className="h-16 w-24 bg-muted rounded flex items-center justify-center">
-              <Video className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm truncate">{block.alt_text || 'Vidéo'}</p>
-              {block.video_url && (
-                <p className="text-xs text-muted-foreground truncate">{block.video_url}</p>
-              )}
-            </div>
-          </div>
-        );
-
+        return block.video_url ? '✓ Vidéo configurée' : 'Aucune vidéo';
       case 'info_bar': {
-        const infoData = getBlockInfoBar(block);
-        const items = infoData.items || [];
-        return (
-          <div className="flex items-center gap-4 text-sm">
-            {items.length > 0 ? (
-              items.map((item, idx) => (
-                <span key={idx} className="flex items-center gap-1">
-                  {item.icon && <span className="text-muted-foreground">{item.icon}</span>}
-                  <span className="text-muted-foreground">{item.label}:</span> {item.value || '—'}
-                </span>
-              ))
-            ) : (
-              <span className="text-muted-foreground">Aucune info configurée</span>
-            )}
-          </div>
-        );
+        const info = getBlockInfoBar(block);
+        return info.items?.length ? `${info.items.length} info(s)` : 'À configurer';
       }
-
       case 'list_items': {
-        const listData = getBlockListItems(block);
-        return (
-          <div className="space-y-1">
-            {listData.title && (
-              <p className="text-sm font-medium">{listData.title}</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              {listData.items.length} élément{listData.items.length > 1 ? 's' : ''}
-            </p>
-            {listData.items.slice(0, 2).map((item, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs">
-                <span>{item.icon || '•'}</span>
-                <span className="truncate">{item.name}</span>
-              </div>
-            ))}
-            {listData.items.length > 2 && (
-              <p className="text-xs text-muted-foreground">
-                + {listData.items.length - 2} autre{listData.items.length > 3 ? 's' : ''}
-              </p>
-            )}
-          </div>
-        );
+        const list = getBlockListItems(block);
+        return list.items?.length ? `${list.items.length} élément(s)` : 'À configurer';
       }
-
       case 'floating_image': {
+        if (!block.image_url) return 'Aucune image';
         const floatData = getBlockFloatingImage(block);
-        return (
-          <div className="flex items-center gap-3">
-            {block.image_url ? (
-              <img
-                src={block.image_url}
-                alt=""
-                className="h-16 w-16 object-contain rounded bg-muted"
-              />
-            ) : (
-              <div className="h-16 w-16 bg-muted rounded flex items-center justify-center">
-                <ImageIcon className="h-6 w-6 text-muted-foreground" />
-              </div>
-            )}
-            <div className="text-sm">
-              <p>Position: {floatData.position === 'bottom-right' ? 'Bas droite' : 'Bas gauche'}</p>
-              <p className="text-xs text-muted-foreground">Hauteur: {floatData.height}%</p>
-            </div>
-          </div>
-        );
+        const posLabel = floatData.position.includes('top') ? '↑' : '↓';
+        const sideLabel = floatData.position.includes('right') ? '→' : '←';
+        const extras: string[] = [];
+        if (floatData.bleed) extras.push(`+${floatData.bleed}%`);
+        if (floatData.fade) extras.push(`${floatData.fade}% fondu`);
+        return `✓ ${posLabel}${sideLabel}${extras.length ? ` ${extras.join(' ')}` : ''}`;
       }
-
       default:
-        return <p className="text-sm text-muted-foreground">Bloc non reconnu</p>;
+        return 'À configurer';
     }
   };
 
   return (
     <div
       className={cn(
-        'rounded-lg border-2 p-4 cursor-pointer transition-all hover:border-primary/50',
+        'rounded-lg border-2 p-3 cursor-pointer transition-all hover:border-primary/50',
         config.bgColor,
         config.borderColor
       )}
       onClick={onClick}
     >
-      <div className={cn('flex items-center gap-2 mb-2', config.textColor)}>
+      <div className={cn('flex items-center gap-2', config.textColor)}>
         <config.icon className="h-4 w-4" />
-        <span className="text-xs font-medium">{config.label}</span>
+        <span className="text-sm font-medium">{config.label}</span>
+        <span className="text-xs text-muted-foreground ml-1">— {getQuickInfo()}</span>
         <Badge variant="outline" className="ml-auto text-[10px]">
-          Cliquer pour éditer
+          Éditer
         </Badge>
       </div>
-      {renderPreview()}
     </div>
   );
 }
@@ -837,6 +761,8 @@ function ComplexBlockModal({
   const [floatingMetadata, setFloatingMetadata] = useState<FloatingImageMetadata>({
     position: 'bottom-right',
     height: 50,
+    bleed: 0,
+    fade: 0,
   });
 
   // Initialiser le formulaire quand le bloc change
@@ -852,7 +778,7 @@ function ComplexBlockModal({
         metadata: block.metadata,
       });
 
-      // Charger les métadonnées (avec rétrocompatibilité)
+      // Charger les métadonnées
       if (block.block_type === 'list_items') {
         setListMetadata(getBlockListItems(block));
       } else if (block.block_type === 'info_bar') {
@@ -869,20 +795,20 @@ function ComplexBlockModal({
 
     switch (form.block_type) {
       case 'list_items':
-        content = null; // Plus de content pour list_items
+        content = null;
         metadata = listMetadata;
         break;
       case 'info_bar':
-        content = null; // Plus de content pour info_bar
-        // Ne sauvegarder que si au moins un champ est rempli
-        const hasInfoData = infoBarMetadata.items?.some(item => item.value);        metadata = hasInfoData ? infoBarMetadata : null;
+        content = null;
+        const hasInfoData = infoBarMetadata.items?.some(item => item.value);
+        metadata = hasInfoData ? infoBarMetadata : null;
         break;
       case 'floating_image':
-        content = null; // Plus de content pour floating_image
+        content = null;
         metadata = floatingMetadata;
         break;
       default:
-        // Pour image et video, content reste utilisé normalement
+        // Pour image, video
         metadata = null;
     }
 
@@ -998,7 +924,7 @@ function ComplexBlockModal({
                   <Label>Position</Label>
                   <Select
                     value={floatingMetadata.position}
-                    onValueChange={(v: 'bottom-right' | 'bottom-left') =>
+                    onValueChange={(v: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left') =>
                       setFloatingMetadata({ ...floatingMetadata, position: v })
                     }
                   >
@@ -1006,8 +932,10 @@ function ComplexBlockModal({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="bottom-right">Bas droite</SelectItem>
+                      <SelectItem value="top-left">Haut gauche</SelectItem>
+                      <SelectItem value="top-right">Haut droite</SelectItem>
                       <SelectItem value="bottom-left">Bas gauche</SelectItem>
+                      <SelectItem value="bottom-right">Bas droite</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1022,6 +950,36 @@ function ComplexBlockModal({
                       setFloatingMetadata({ ...floatingMetadata, height: parseInt(e.target.value) || 50 })
                     }
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Fond perdu ({floatingMetadata.bleed || 0}%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={50}
+                    value={floatingMetadata.bleed || 0}
+                    onChange={(e) =>
+                      setFloatingMetadata({ ...floatingMetadata, bleed: parseInt(e.target.value) || 0 })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    0 = pas de dépassement
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Fondu ({floatingMetadata.fade || 0}%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={floatingMetadata.fade || 0}
+                    onChange={(e) =>
+                      setFloatingMetadata({ ...floatingMetadata, fade: parseInt(e.target.value) || 0 })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    0 = opaque, 100 = invisible
+                  </p>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -1113,7 +1071,7 @@ export function SectionEditor({
         break;
       case 'floating_image':
         content = null;
-        metadata = { position: 'bottom-right', height: 50 };
+        metadata = { position: 'bottom-right', height: 50, bleed: 0, fade: 0 };
         break;
       default:
         content = null;

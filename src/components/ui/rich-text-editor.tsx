@@ -1,15 +1,8 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Bold, Italic, Underline, List, Eye, EyeOff, Type, Sparkles } from 'lucide-react';
+import { Bold, Italic, Underline, List, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface RichTextEditorProps {
@@ -20,14 +13,7 @@ interface RichTextEditorProps {
   rows?: number;
   maxLength?: number;
   className?: string;
-  showPreview?: boolean;
 }
-
-const textFormats = [
-  { value: 'normal', label: 'Texte normal', prefix: '', icon: 'Aa' },
-  { value: 'h1', label: 'Titre', prefix: '# ', icon: 'H1' },
-  { value: 'h2', label: 'Sous-titre', prefix: '## ', icon: 'H2' },
-];
 
 export function RichTextEditor({
   value,
@@ -37,10 +23,8 @@ export function RichTextEditor({
   rows = 6,
   maxLength,
   className,
-  showPreview: initialShowPreview = false,
 }: RichTextEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [showPreview, setShowPreview] = useState(initialShowPreview);
 
   const contentLength = value?.length || 0;
   const isOverLimit = maxLength ? contentLength > maxLength : false;
@@ -79,57 +63,6 @@ export function RichTextEditor({
     }, 0);
   };
 
-  /**
-   * Applique un format de paragraphe (titre, sous-titre, normal)
-   * sur la ligne courante
-   */
-  const applyLineFormat = (formatPrefix: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
-    const lineEnd = value.indexOf('\n', start);
-    const actualLineEnd = lineEnd === -1 ? value.length : lineEnd;
-    
-    // Récupérer la ligne actuelle
-    let currentLine = value.substring(lineStart, actualLineEnd);
-    
-    // Supprimer les préfixes existants (# ou ##)
-    currentLine = currentLine.replace(/^#{1,2}\s*/, '');
-    
-    // Appliquer le nouveau format
-    const newLine = formatPrefix + currentLine;
-    
-    const newText = value.substring(0, lineStart) + newLine + value.substring(actualLineEnd);
-    onChange(newText);
-
-    // Repositionner le curseur
-    const newCursorPos = lineStart + formatPrefix.length + (start - lineStart - (value.substring(lineStart, start).match(/^#{1,2}\s*/)?.[0]?.length || 0));
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(newCursorPos, newCursorPos);
-    }, 0);
-  };
-
-  /**
-   * Détecte le format de la ligne courante
-   */
-  const getCurrentLineFormat = (): string => {
-    const textarea = textareaRef.current;
-    if (!textarea) return 'normal';
-
-    const start = textarea.selectionStart;
-    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
-    const lineEnd = value.indexOf('\n', start);
-    const actualLineEnd = lineEnd === -1 ? value.length : lineEnd;
-    const currentLine = value.substring(lineStart, actualLineEnd);
-
-    if (currentLine.startsWith('## ')) return 'h2';
-    if (currentLine.startsWith('# ')) return 'h1';
-    return 'normal';
-  };
-
   const handleBold = () => insertMarkdown('**', '**');
   const handleItalic = () => insertMarkdown('*', '*');
   const handleUnderline = () => insertMarkdown('__', '__');
@@ -151,37 +84,6 @@ export function RichTextEditor({
     }, 0);
   };
 
-  const handleFormatChange = (format: string) => {
-    const formatInfo = textFormats.find(f => f.value === format);
-    if (formatInfo) {
-      applyLineFormat(formatInfo.prefix);
-    }
-  };
-
-  /**
-   * Rendu Markdown simplifié pour l'aperçu
-   */
-  const renderMarkdown = (text: string): string => {
-    if (!text) return '';
-    
-    return text
-      // Titres : # titre et ## sous-titre
-      .replace(/^# (.+)$/gm, '<h3 class="text-lg font-bold mt-3 mb-1">$1</h3>')
-      .replace(/^## (.+)$/gm, '<h4 class="text-base font-semibold mt-2 mb-1">$1</h4>')
-      // Gras : **texte**
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      // Souligné : __texte__ (traité avant italique)
-      .replace(/__(.+?)__/g, '<u>$1</u>')
-      // Highlight : ==texte== (gras + couleur primaire + taille légèrement supérieure)
-      .replace(/==(.+?)==/g, '<span class="font-bold text-primary text-[1.1em]">$1</span>')
-      // Italique : *texte*
-      .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
-      // Listes : - item
-      .replace(/^- (.+)$/gm, '<div class="flex gap-2"><span>•</span><span>$1</span></div>')
-      // Retours à la ligne
-      .replace(/\n/g, '<br />');
-  };
-
   return (
     <div className={cn('space-y-2', className)}>
       {label && (
@@ -197,26 +99,6 @@ export function RichTextEditor({
 
       {/* Barre d'outils */}
       <div className="flex items-center gap-1 p-1 border rounded-t-md bg-muted/30 flex-wrap">
-        {/* Sélecteur de format */}
-        <Select value={getCurrentLineFormat()} onValueChange={handleFormatChange}>
-          <SelectTrigger className="w-[130px] h-8 text-xs">
-            <Type className="h-3 w-3 mr-1" />
-            <SelectValue placeholder="Format" />
-          </SelectTrigger>
-          <SelectContent>
-            {textFormats.map((format) => (
-              <SelectItem key={format.value} value={format.value}>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs w-6">{format.icon}</span>
-                  <span>{format.label}</span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <div className="w-px h-5 bg-border mx-1" />
-
         <Button
           type="button"
           variant="ghost"
@@ -270,20 +152,6 @@ export function RichTextEditor({
         >
           <List className="h-4 w-4" />
         </Button>
-
-        <div className="flex-1" />
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 px-2 gap-1"
-          onClick={() => setShowPreview(!showPreview)}
-          title={showPreview ? 'Masquer l\'aperçu' : 'Afficher l\'aperçu'}
-        >
-          {showPreview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          <span className="text-xs hidden sm:inline">Aperçu</span>
-        </Button>
       </div>
 
       {/* Zone de texte */}
@@ -321,17 +189,6 @@ export function RichTextEditor({
           }
         }}
       />
-
-      {/* Aperçu */}
-      {showPreview && value && (
-        <div className="p-3 border rounded-md bg-muted/20">
-          <p className="text-xs text-muted-foreground mb-2 font-medium">Aperçu :</p>
-          <div
-            className="text-sm prose prose-sm max-w-none dark:prose-invert"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(value) }}
-          />
-        </div>
-      )}
 
       {/* Message d'erreur */}
       {isOverLimit && (
