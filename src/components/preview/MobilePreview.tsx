@@ -289,16 +289,6 @@ function getBlockListItems(block: SectionBlock): ListItemsMetadata {
   return (block.metadata as ListItemsMetadata) || { items: [] };
 }
 
-function getBlockFloatingImage(block: SectionBlock): FloatingImageMetadata {
-  const meta = block.metadata as FloatingImageMetadata | null;
-  return {
-    position: meta?.position || 'bottom-right',
-    height: meta?.height || 50,
-    bleed: meta?.bleed || 0,
-    fade: meta?.fade || 0,
-  };
-}
-
 function getBlockHeading(block: SectionBlock): { text: string; emoji?: string } {
   const meta = block.metadata as HeadingMetadata | null;
   return { text: block.content || '', emoji: meta?.emoji };
@@ -464,56 +454,9 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
     );
   }
 
-  // Rendu spécial pour FLOATING_IMAGE
+  // FLOATING_IMAGE est rendu séparément en overlay dans CardPreview
   if (block.block_type === 'floating_image') {
-    const floatData = getBlockFloatingImage(block);
-    
-    if (!block.image_url) return null;
-
-    // Calculer la hauteur en pixels (basé sur un conteneur de ~400px)
-    const heightPx = Math.min(150, Math.round(400 * floatData.height / 100));
-    const hasBleed = floatData.bleed && floatData.bleed > 0;
-    const hasFade = floatData.fade && floatData.fade > 0;
-    const isRight = floatData.position.includes('right');
-    const opacity = hasFade ? (100 - floatData.fade!) / 100 : 1;
-
-    const positionLabel = {
-      'top-left': 'haut gauche',
-      'top-right': 'haut droite',
-      'bottom-left': 'bas gauche',
-      'bottom-right': 'bas droite',
-    }[floatData.position];
-
-    // Construire les infos supplémentaires
-    const extras: string[] = [];
-    if (hasBleed) extras.push(`fond perdu ${floatData.bleed}%`);
-    if (hasFade) extras.push(`fondu ${floatData.fade}%`);
-
-    return (
-      <div className="mb-3" style={hasBleed ? { marginLeft: `-${floatData.bleed}%`, marginRight: `-${floatData.bleed}%` } : undefined}>
-        <div 
-          className={cn(
-            "flex",
-            isRight ? 'justify-end' : 'justify-start'
-          )}
-        >
-          <img
-            src={block.image_url}
-            alt=""
-            className="object-contain animate-pulse"
-            style={{ 
-              height: `${heightPx}px`,
-              maxHeight: '150px',
-              filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))',
-              opacity,
-            }}
-          />
-        </div>
-        <p className="text-[10px] text-center mt-1" style={{ color: colors.textTertiary, paddingLeft: hasBleed ? `${floatData.bleed}%` : 0, paddingRight: hasBleed ? `${floatData.bleed}%` : 0 }}>
-          ↑ Image flottante ({positionLabel}){extras.length > 0 ? ` — ${extras.join(', ')}` : ''} — animée dans l'app
-        </p>
-      </div>
-    );
+    return null;
   }
 
   // Rendu par défaut pour text, tip, example, image, video
@@ -586,9 +529,13 @@ function CardPreview({ conceptName, title, blocks, colors, theme }: CardPreviewP
     ? 'from-white/[0.03] to-white/[0.01]'
     : 'from-black/[0.03] to-black/[0.01]';
 
+  // Séparer les blocs floating_image des autres
+  const floatingBlocks = blocks.filter(b => b.block_type === 'floating_image');
+  const contentBlocks = blocks.filter(b => b.block_type !== 'floating_image');
+
   return (
     <div
-      className="h-full rounded-[20px] border flex flex-col overflow-hidden"
+      className="h-full rounded-[20px] border flex flex-col overflow-hidden relative"
       style={{ 
         borderColor: colors.cardBorder,
         backgroundColor: colors.cardBackground,
@@ -636,12 +583,59 @@ function CardPreview({ conceptName, title, blocks, colors, theme }: CardPreviewP
             </p>
           )}
 
-          {/* Blocs */}
-          {blocks.map((block, index) => (
+          {/* Blocs (sans floating_image) */}
+          {contentBlocks.map((block, index) => (
             <BlockRenderer key={block.id || index} block={block} colors={colors} />
           ))}
         </div>
       </div>
+
+      {/* Floating images en position absolue */}
+      {floatingBlocks.map((block, index) => (
+        <FloatingImageOverlay key={block.id || `float-${index}`} block={block} colors={colors} />
+      ))}
+    </div>
+  );
+}
+
+// Composant pour les images flottantes en overlay
+function FloatingImageOverlay({ block }: { block: SectionBlock; colors: typeof mobileColors.dark }) {
+  if (!block.image_url) return null;
+
+  const meta = block.metadata as FloatingImageMetadata | null;
+  const position = meta?.position || 'bottom-right';
+  const height = meta?.height || 50;
+  const bleed = meta?.bleed || 0;
+  const fade = meta?.fade || 0;
+
+  const isTop = position.includes('top');
+  const isRight = position.includes('right');
+
+  // Calculer la hauteur en pixels (basé sur un conteneur de ~400px)
+  const heightPx = Math.min(180, Math.round(400 * height / 100));
+  const opacity = (100 - fade) / 100;
+
+  // Position styles
+  const positionStyles: React.CSSProperties = {
+    position: 'absolute',
+    zIndex: 10,
+    pointerEvents: 'none',
+    ...(isTop ? { top: 0 } : { bottom: 0 }),
+    ...(isRight ? { right: `-${bleed}%` } : { left: `-${bleed}%` }),
+  };
+
+  return (
+    <div style={positionStyles}>
+      <img
+        src={block.image_url}
+        alt=""
+        className="object-contain"
+        style={{ 
+          height: `${heightPx}px`,
+          opacity,
+          filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.4))',
+        }}
+      />
     </div>
   );
 }
