@@ -5,11 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { useStorage, getPathFromUrl } from '@/hooks/useStorage';
+import { useStorage, getPathFromUrl, type BucketName } from '@/hooks/useStorage';
 import { Upload, X, Image as ImageIcon, Loader2, Link, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-type BucketName = 'game-covers' | 'lesson-images' | 'quiz-images';
+import { toast } from 'sonner';
 
 // Dimensions cibles par bucket
 const RESIZE_CONFIG: Record<BucketName, { width: number; height: number }> = {
@@ -18,15 +17,135 @@ const RESIZE_CONFIG: Record<BucketName, { width: number; height: number }> = {
   'quiz-images': { width: 800, height: 450 }, // 16:9
 };
 
+// Taille max en octets (150 Ko)
+const MAX_FILE_SIZE = 150 * 1024;
+
+/**
+ * Compresse une image pour qu'elle ne dépasse pas MAX_FILE_SIZE
+ * Réduit d'abord la qualité, puis les dimensions si nécessaire
+ * Retourne { file, warning } où warning est true si la compression n'a pas suffi
+ */
+async function compressImage(file: File, maxSize: number = MAX_FILE_SIZE): Promise<{ file: File; warning: boolean }> {
+  // Si déjà sous la limite, retourner tel quel
+  if (file.size <= maxSize) {
+    return { file, warning: false };
+  }
+
+  const image = new Image();
+  const imageUrl = URL.createObjectURL(file);
+  
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error('Erreur chargement image'));
+    image.src = imageUrl;
+  });
+
+  URL.revokeObjectURL(imageUrl);
+
+  let width = image.width;
+  let height = image.height;
+  let quality = 0.85;
+  let result: File | null = null;
+
+  // Essayer d'abord en réduisant la qualité (85% → 60%)
+  while (quality >= 0.6) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) throw new Error('Impossible de créer le contexte canvas');
+    
+    ctx.drawImage(image, 0, 0, width, height);
+    
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', quality);
+    });
+    
+    if (blob && blob.size <= maxSize) {
+      result = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+      });
+      break;
+    }
+    
+    quality -= 0.05;
+  }
+
+  // Si la qualité ne suffit pas, réduire aussi les dimensions (90% → 50%)
+  if (!result) {
+    let scale = 0.9;
+    
+    while (scale >= 0.5) {
+      width = Math.round(image.width * scale);
+      height = Math.round(image.height * scale);
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) throw new Error('Impossible de créer le contexte canvas');
+      
+      ctx.drawImage(image, 0, 0, width, height);
+      
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', 0.7);
+      });
+      
+      if (blob && blob.size <= maxSize) {
+        result = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+          type: 'image/jpeg',
+          lastModified: Date.now(),
+        });
+        break;
+      }
+      
+      scale -= 0.1;
+    }
+  }
+
+  // Dernier recours : compression plus agressive
+  if (!result) {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(image.width * 0.4);
+    canvas.height = Math.round(image.height * 0.4);
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) throw new Error('Impossible de créer le contexte canvas');
+    
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', 0.6);
+    });
+    
+    if (blob) {
+      result = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+      });
+    }
+  }
+
+  const finalFile = result || file;
+  const warning = finalFile.size > maxSize;
+  
+  return { file: finalFile, warning };
+}
+
 interface ImageUploadProps {
   value: string | null;
   onChange: (url: string | null) => void;
   bucket: BucketName;
   folder?: string;
+  filePrefix?: string; // Préfixe pour le nom du fichier (ex: nom du jeu)
   label?: string;
   aspectRatio?: 'video' | 'square' | 'portrait';
   className?: string;
   showUrlInput?: boolean;
+  noCrop?: boolean; // Si true, upload l'image sans passer par le cropper
 }
 
 /**
@@ -88,10 +207,12 @@ export function ImageUpload({
   onChange,
   bucket,
   folder,
+  filePrefix,
   label = 'Image',
   aspectRatio = 'video',
   className,
   showUrlInput = true,
+  noCrop = false,
 }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { upload, remove, isUploading, progress } = useStorage();
@@ -122,12 +243,34 @@ export function ImageUpload({
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
 
-  const handleFileSelect = (file: File) => {
-    // Créer une URL pour l'image et ouvrir l'éditeur de crop
-    const imageUrl = URL.createObjectURL(file);
-    setImageToCrop(imageUrl);
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
+  const handleFileSelect = async (file: File) => {
+    if (noCrop) {
+      // Upload direct sans cropping, mais avec compression
+      setIsProcessing(true);
+      try {
+        const { file: compressedFile, warning } = await compressImage(file);
+        
+        if (warning) {
+          toast.warning(`Image compressée mais toujours volumineuse (${Math.round(compressedFile.size / 1024)} Ko)`);
+        }
+        
+        const result = await upload(compressedFile, bucket, folder, filePrefix);
+        if (result) {
+          onChange(result.url);
+        }
+      } catch (error) {
+        console.error('Erreur lors de la compression:', error);
+        toast.error('Erreur lors du traitement de l\'image');
+      } finally {
+        setIsProcessing(false);
+      }
+    } else {
+      // Créer une URL pour l'image et ouvrir l'éditeur de crop
+      const imageUrl = URL.createObjectURL(file);
+      setImageToCrop(imageUrl);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+    }
   };
 
   const handleCropConfirm = async () => {
@@ -143,12 +286,20 @@ export function ImageUpload({
         config.height
       );
 
-      const result = await upload(croppedFile, bucket, folder);
+      // Compresser si nécessaire
+      const { file: compressedFile, warning } = await compressImage(croppedFile);
+      
+      if (warning) {
+        toast.warning(`Image compressée mais toujours volumineuse (${Math.round(compressedFile.size / 1024)} Ko)`);
+      }
+
+      const result = await upload(compressedFile, bucket, folder, filePrefix);
       if (result) {
         onChange(result.url);
       }
     } catch (error) {
       console.error('Erreur lors du recadrage:', error);
+      toast.error('Erreur lors du traitement de l\'image');
     } finally {
       setIsProcessing(false);
       setImageToCrop(null);
@@ -344,19 +495,21 @@ export function ImageUpload({
                 dragActive
                   ? 'border-primary bg-primary/5'
                   : 'border-muted-foreground/25 hover:border-muted-foreground/50',
-                isUploading && 'pointer-events-none'
+                (isUploading || isProcessing) && 'pointer-events-none'
               )}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
-              onClick={() => !isUploading && inputRef.current?.click()}
+              onClick={() => !isUploading && !isProcessing && inputRef.current?.click()}
             >
               <div className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer">
-                {isUploading ? (
+                {isUploading || isProcessing ? (
                   <>
                     <Loader2 className="h-8 w-8 text-primary animate-spin mb-2" />
-                    <p className="text-sm text-muted-foreground">Upload en cours... {progress}%</p>
+                    <p className="text-sm text-muted-foreground">
+                      {isProcessing ? 'Compression en cours...' : `Upload en cours... ${progress}%`}
+                    </p>
                   </>
                 ) : (
                   <>
@@ -365,7 +518,7 @@ export function ImageUpload({
                       Glissez une image ici ou <span className="text-primary">parcourir</span>
                     </p>
                     <p className="text-xs text-muted-foreground/70 mt-1">
-                      JPG, PNG, WebP • Max 2 Mo
+                      JPG, PNG, WebP • Max 2 Mo → compressé à 150 Ko
                     </p>
                   </>
                 )}

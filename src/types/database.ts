@@ -57,16 +57,73 @@ export interface LessonSection {
   blocks?: SectionBlock[];
 }
 
+export type BlockType = 
+  | 'text' 
+  | 'image' 
+  | 'video' 
+  | 'tip' 
+  | 'example'
+  | 'quote'
+  | 'info_bar'
+  | 'list_items'
+  | 'floating_image'
+  | 'heading';
+
 export interface SectionBlock {
   id: string;
   section_id: string;
-  block_type: 'text' | 'image' | 'video' | 'tip' | 'example';
+  block_type: BlockType;
   order_index: number;
-  content: string;
+  content: string; // Texte simple ou JSON stringifié pour les types complexes
   image_url: string | null;
   video_url: string | null;
   alt_text: string | null;
   created_at: string;
+}
+
+// ============ TYPES DE CONTENU STRUCTURÉ POUR LES BLOCS ============
+
+// Pour block_type: 'info_bar'
+export interface InfoBarItem {
+  label: string;      // ex: "Durée", "Joueurs", "Âge"
+  value: string;      // ex: "30 min", "2-4", "10+"
+  icon?: string;      // Emoji optionnel (ex: "⏱", "👥", "🎂")
+}
+
+export interface InfoBarContent {
+  items: InfoBarItem[];
+}
+
+// Pour block_type: 'list_items'
+export interface ListItem {
+  icon?: string;      // Emoji ou nom d'icône
+  color?: 'yellow' | 'blue' | 'green' | 'purple' | 'red';
+  name: string;
+  description?: string;
+  badge?: string;     // ex: "3=", "4≠", "5"
+}
+
+export interface ListItemsContent {
+  title?: string;     // Titre au-dessus de la liste (avec emoji optionnel)
+  items: ListItem[];
+}
+
+// Pour block_type: 'floating_image'
+// L'URL de l'image est stockée dans image_url (pas dans le JSON)
+export interface FloatingImageContent {
+  position: 'bottom-right' | 'bottom-left';
+  height: number;     // Hauteur en % de l'écran
+}
+
+// Pour block_type: 'heading'
+export interface HeadingContent {
+  text: string;
+  emoji?: string;
+}
+
+// Pour block_type: 'quote'
+export interface QuoteContent {
+  text: string;
 }
 
 // ============ FIN NOUVELLE ARCHITECTURE ============
@@ -131,7 +188,7 @@ export interface SectionFormData {
 }
 
 export interface BlockFormData {
-  block_type: 'text' | 'image' | 'video' | 'tip' | 'example';
+  block_type: BlockType;
   order_index: number;
   content: string;
   image_url: string | null;

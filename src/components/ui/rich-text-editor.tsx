@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Bold, Italic, Underline, List, Eye, EyeOff, Type } from 'lucide-react';
+import { Bold, Italic, Underline, List, Eye, EyeOff, Type, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface RichTextEditorProps {
@@ -133,6 +133,7 @@ export function RichTextEditor({
   const handleBold = () => insertMarkdown('**', '**');
   const handleItalic = () => insertMarkdown('*', '*');
   const handleUnderline = () => insertMarkdown('__', '__');
+  const handleHighlight = () => insertMarkdown('==', '==');
   const handleList = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -171,6 +172,8 @@ export function RichTextEditor({
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       // Souligné : __texte__ (traité avant italique)
       .replace(/__(.+?)__/g, '<u>$1</u>')
+      // Highlight : ==texte== (gras + couleur primaire + taille légèrement supérieure)
+      .replace(/==(.+?)==/g, '<span class="font-bold text-primary text-[1.1em]">$1</span>')
       // Italique : *texte*
       .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
       // Listes : - item
@@ -244,6 +247,16 @@ export function RichTextEditor({
         >
           <Underline className="h-4 w-4" />
         </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0 text-primary"
+          onClick={handleHighlight}
+          title="Mise en évidence (Ctrl+H)"
+        >
+          <Sparkles className="h-4 w-4" />
+        </Button>
         
         <div className="w-px h-5 bg-border mx-1" />
         
@@ -300,6 +313,10 @@ export function RichTextEditor({
                 e.preventDefault();
                 handleUnderline();
                 break;
+              case 'h':
+                e.preventDefault();
+                handleHighlight();
+                break;
             }
           }
         }}
@@ -325,7 +342,7 @@ export function RichTextEditor({
 
       {/* Aide */}
       <p className="text-xs text-muted-foreground">
-        <span className="font-medium">Raccourcis :</span> Ctrl+B (gras), Ctrl+I (italique), Ctrl+U (souligné)
+        <span className="font-medium">Raccourcis :</span> Ctrl+B (gras), Ctrl+I (italique), Ctrl+U (souligné), Ctrl+H (évidence)
       </p>
     </div>
   );

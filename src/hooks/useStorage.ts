@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-type BucketName = 'game-covers' | 'lesson-images';
+export type BucketName = 'game-covers' | 'lesson-images' | 'quiz-images';
 
 interface UploadResult {
   url: string;
@@ -10,7 +10,7 @@ interface UploadResult {
 }
 
 interface UseStorageReturn {
-  upload: (file: File, bucket: BucketName, folder?: string) => Promise<UploadResult | null>;
+  upload: (file: File, bucket: BucketName, folder?: string, filePrefix?: string) => Promise<UploadResult | null>;
   remove: (path: string, bucket: BucketName) => Promise<boolean>;
   isUploading: boolean;
   progress: number;
@@ -23,7 +23,8 @@ export function useStorage(): UseStorageReturn {
   const upload = async (
     file: File,
     bucket: BucketName,
-    folder?: string
+    folder?: string,
+    filePrefix?: string
   ): Promise<UploadResult | null> => {
     setIsUploading(true);
     setProgress(0);
@@ -43,11 +44,24 @@ export function useStorage(): UseStorageReturn {
         return null;
       }
 
-      // Generate unique filename
+      // Generate unique filename with optional prefix
       const timestamp = Date.now();
       const randomStr = Math.random().toString(36).substring(2, 8);
       const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const filename = `${timestamp}-${randomStr}.${extension}`;
+      
+      // Slugify le préfixe pour éviter les caractères spéciaux
+      const slugifiedPrefix = filePrefix 
+        ? filePrefix
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '') // Enlever accents
+            .replace(/[^a-z0-9]+/g, '-')     // Remplacer caractères spéciaux par -
+            .replace(/^-|-$/g, '')            // Enlever - au début/fin
+        : null;
+      
+      const filename = slugifiedPrefix
+        ? `${slugifiedPrefix}-${timestamp}-${randomStr}.${extension}`
+        : `${timestamp}-${randomStr}.${extension}`;
       const path = folder ? `${folder}/${filename}` : filename;
 
       setProgress(30);

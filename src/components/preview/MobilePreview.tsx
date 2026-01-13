@@ -6,7 +6,15 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { LessonSection, SectionBlock } from '@/types/database';
+import type { 
+  LessonSection, 
+  SectionBlock,
+  ListItemsContent,
+  InfoBarContent,
+  FloatingImageContent,
+  HeadingContent,
+  QuoteContent 
+} from '@/types/database';
 import { Moon, Sun } from 'lucide-react';
 
 // ============================================
@@ -49,6 +57,20 @@ const blockAccentColors: Record<string, string> = {
   image: '#10b981',
   video: '#ef4444',
   summary: '#10b981',
+  quote: '#6366f1',
+  heading: '#64748b',
+  info_bar: '#06b6d4',
+  list_items: '#f97316',
+  floating_image: '#14b8a6',
+};
+
+// Couleurs pour les items de liste
+const listItemColors: Record<string, string> = {
+  yellow: '#eab308',
+  blue: '#3b82f6',
+  green: '#22c55e',
+  purple: '#a855f7',
+  red: '#ef4444',
 };
 
 // ============================================
@@ -76,6 +98,7 @@ interface TextSegment {
   italic?: boolean;
   underline?: boolean;
   strikethrough?: boolean;
+  highlight?: boolean;
 }
 
 interface ParsedLine {
@@ -85,7 +108,8 @@ interface ParsedLine {
 
 function parseInlineStyles(text: string): TextSegment[] {
   const segments: TextSegment[] = [];
-  const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(__(.+?)__)|(_(.+?)_)|(~~(.+?)~~)/g;
+  // Ajout de ==texte== pour le highlight
+  const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(__(.+?)__)|(_(.+?)_)|(~~(.+?)~~)|(==(.+?)==)/g;
   
   let lastIndex = 0;
   let match;
@@ -105,6 +129,8 @@ function parseInlineStyles(text: string): TextSegment[] {
       segments.push({ text: match[8], italic: true });
     } else if (match[9]) {
       segments.push({ text: match[10], strikethrough: true });
+    } else if (match[11]) {
+      segments.push({ text: match[12], highlight: true });
     }
 
     lastIndex = match.index + match[0].length;
@@ -210,6 +236,19 @@ function MarkdownRenderer({ content, color }: { content: string; color: string }
 
 function renderSegments(segments: TextSegment[]): React.ReactNode {
   return segments.map((segment, index) => {
+    // Highlight a un style spécial : gras + couleur primaire + taille légèrement supérieure
+    if (segment.highlight) {
+      return (
+        <span 
+          key={index} 
+          className="font-bold text-[1.05em]"
+          style={{ color: '#8b5cf6' }}
+        >
+          {segment.text}
+        </span>
+      );
+    }
+    
     const classes: string[] = [];
     
     if (segment.bold) classes.push('font-bold');
@@ -238,10 +277,205 @@ interface BlockRendererProps {
   colors: typeof mobileColors.dark;
 }
 
+// Helper pour parser le JSON de manière sécurisée
+function safeJsonParse<T>(content: string, defaultValue: T): T {
+  try {
+    return content ? JSON.parse(content) : defaultValue;
+  } catch {
+    return defaultValue;
+  }
+}
+
 function BlockRenderer({ block, colors }: BlockRendererProps) {
   const hasAccentBar = block.block_type === 'tip' || block.block_type === 'example';
   const accentColor = blockAccentColors[block.block_type] || colors.primary;
 
+  // Rendu spécial pour QUOTE
+  if (block.block_type === 'quote') {
+    const quoteContent = safeJsonParse<QuoteContent>(block.content, { text: '' });
+    return (
+      <div className="mb-3">
+        <div 
+          className="px-4 py-3 rounded-xl border-l-4"
+          style={{ 
+            backgroundColor: `${accentColor}15`,
+            borderLeftColor: accentColor,
+          }}
+        >
+          <p 
+            className="text-[13px] italic leading-[20px]"
+            style={{ color: colors.text }}
+          >
+            "{quoteContent.text}"
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Rendu spécial pour HEADING
+  if (block.block_type === 'heading') {
+    const headingContent = safeJsonParse<HeadingContent>(block.content, { text: '' });
+    return (
+      <div className="mb-3 mt-2">
+        <p 
+          className="text-[16px] font-bold leading-[22px]"
+          style={{ color: colors.text }}
+        >
+          {headingContent.emoji && <span className="mr-2">{headingContent.emoji}</span>}
+          {headingContent.text}
+        </p>
+      </div>
+    );
+  }
+
+  // Rendu spécial pour INFO_BAR
+  if (block.block_type === 'info_bar') {
+    const infoContent = safeJsonParse<InfoBarContent>(block.content, { items: [] });
+    const items = infoContent.items || [];
+
+    if (items.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="mb-3">
+        <div className="flex gap-2">
+          {items.map((item, index) => (
+            <div 
+              key={index}
+              className="flex-1 px-2 py-2 rounded-xl text-center"
+              style={{ 
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.cardBorder,
+                border: '1px solid',
+              }}
+            >
+              {item.icon && <span className="text-[16px] block">{item.icon}</span>}
+              <span 
+                className="text-[12px] font-bold block"
+                style={{ color: colors.text }}
+              >
+                {item.value || '—'}
+              </span>
+              <span 
+                className="text-[9px] block"
+                style={{ color: colors.textSecondary }}
+              >
+                {item.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Rendu spécial pour LIST_ITEMS
+  if (block.block_type === 'list_items') {
+    const listContent = safeJsonParse<ListItemsContent>(block.content, { items: [] });
+    return (
+      <div className="mb-3">
+        {listContent.title && (
+          <p 
+            className="text-[14px] font-semibold mb-2"
+            style={{ color: colors.text }}
+          >
+            {listContent.title}
+          </p>
+        )}
+        <div className="space-y-2">
+          {listContent.items.map((item, index) => (
+            <div 
+              key={index}
+              className="flex items-center gap-3 p-2.5 rounded-xl"
+              style={{ 
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.cardBorder,
+                border: '1px solid',
+              }}
+            >
+              {/* Icon avec couleur */}
+              <div 
+                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ 
+                  backgroundColor: listItemColors[item.color || 'blue'] + '20',
+                }}
+              >
+                <span className="text-[14px]">{item.icon || '📌'}</span>
+              </div>
+              
+              {/* Contenu */}
+              <div className="flex-1 min-w-0">
+                <p 
+                  className="text-[12px] font-semibold truncate"
+                  style={{ color: colors.text }}
+                >
+                  {item.name}
+                </p>
+                {item.description && (
+                  <p 
+                    className="text-[10px] truncate"
+                    style={{ color: colors.textSecondary }}
+                  >
+                    {item.description}
+                  </p>
+                )}
+              </div>
+
+              {/* Badge */}
+              {item.badge && (
+                <div 
+                  className="px-2 py-0.5 rounded-md text-[10px] font-bold"
+                  style={{ 
+                    backgroundColor: listItemColors[item.color || 'blue'] + '30',
+                    color: listItemColors[item.color || 'blue'],
+                  }}
+                >
+                  {item.badge}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Rendu spécial pour FLOATING_IMAGE
+  if (block.block_type === 'floating_image') {
+    const floatContent = safeJsonParse<FloatingImageContent>(block.content, { 
+      position: 'bottom-right', height: 50 
+    });
+    
+    if (!block.image_url) return null;
+
+    return (
+      <div className="mb-3 relative">
+        <div 
+          className={cn(
+            "absolute bottom-0",
+            floatContent.position === 'bottom-right' ? 'right-0' : 'left-0'
+          )}
+          style={{ height: `${floatContent.height}%`, maxHeight: '150px' }}
+        >
+          <img
+            src={block.image_url}
+            alt=""
+            className="h-full w-auto object-contain animate-pulse"
+            style={{ 
+              filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))',
+            }}
+          />
+        </div>
+        <p className="text-[10px] text-center" style={{ color: colors.textTertiary }}>
+          ↑ Image flottante (animée dans l'app)
+        </p>
+      </div>
+    );
+  }
+
+  // Rendu par défaut pour text, tip, example, image, video
   return (
     <div className="mb-3">
       <div className="flex">
@@ -256,7 +490,7 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
         {/* Contenu du bloc */}
         <div className="flex-1 min-w-0">
           {/* Image */}
-          {block.image_url && (
+          {block.block_type === 'image' && block.image_url && (
             <div className="w-full h-[120px] rounded-xl overflow-hidden mb-3 bg-gray-800">
               <img
                 src={block.image_url}
@@ -617,11 +851,27 @@ export function MobilePreview({
               <p className="font-medium text-gray-300">Légende :</p>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-sm bg-[#f59e0b]" />
-                <span>Astuce (tip)</span>
+                <span>Astuce</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-sm bg-[#8b5cf6]" />
                 <span>Exemple</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm bg-[#6366f1]" />
+                <span>Citation</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm bg-[#06b6d4]" />
+                <span>Infos rapides</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm bg-[#f97316]" />
+                <span>Liste visuelle</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm bg-[#14b8a6]" />
+                <span>Image flottante</span>
               </div>
             </div>
           </div>

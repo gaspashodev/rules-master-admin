@@ -49,6 +49,7 @@ export function GameFormPage() {
   });
 
   const watchName = watch('name');
+  const watchSlug = watch('slug');
   const watchCoverImage = watch('cover_image_url');
   const watchPublished = watch('published');
   const watchFeatured = watch('featured');
@@ -148,6 +149,8 @@ export function GameFormPage() {
               watchPublished={watchPublished}
               watchFeatured={watchFeatured}
               watchDifficulty={watchDifficulty}
+              watchSlug={watchSlug}
+              watchName={watchName}
               gameId={id}
               game={game}
             />
@@ -170,6 +173,8 @@ export function GameFormPage() {
           watchPublished={watchPublished}
           watchFeatured={watchFeatured}
           watchDifficulty={watchDifficulty}
+          watchSlug={watchSlug}
+          watchName={watchName}
         />
       )}
     </form>
@@ -183,6 +188,8 @@ interface FormFieldsProps {
   watchPublished: boolean;
   watchFeatured: boolean;
   watchDifficulty: string | undefined;
+  watchSlug: string;
+  watchName: string;
   gameId?: string;
   game?: Game | null;
 }
@@ -194,6 +201,8 @@ function FormFields({
   watchPublished,
   watchFeatured,
   watchDifficulty,
+  watchSlug,
+  watchName,
   gameId,
   game,
 }: FormFieldsProps) {
@@ -331,6 +340,7 @@ function FormFields({
               onChange={(url) => setValue('cover_image_url', url)}
               bucket="game-covers"
               folder={gameId}
+              filePrefix={watchSlug || watchName}
               aspectRatio="video"
               showUrlInput={true}
             />

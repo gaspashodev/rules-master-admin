@@ -6,7 +6,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -25,10 +24,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ImageUpload } from '@/components/ui/image-upload';
-import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import {
   useConcept,
   useUpdateConcept,
@@ -41,8 +37,10 @@ import {
   useDeleteBlock,
   useReorderBlocks,
 } from '@/hooks/useConcepts';
+import { useGame } from '@/hooks/useGames';
 import { QuizEditor } from '@/components/quiz/QuizEditor';
 import { MobilePreview } from '@/components/preview/MobilePreview';
+import { SectionEditor } from '@/components/sections';
 import type { SectionFormData, BlockFormData, LessonSection, SectionBlock } from '@/types/database';
 import {
   ArrowLeft,
@@ -51,17 +49,9 @@ import {
   GripVertical,
   Trash2,
   Pencil,
-  FileText,
-  Image,
-  Video,
-  Lightbulb,
-  Code,
   Clock,
   RefreshCw,
-  ChevronDown,
-  ChevronUp,
   LayoutGrid,
-  Smartphone,
 } from 'lucide-react';
 
 import {
@@ -82,147 +72,21 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// ============ CONSTANTES ============
+// ============ COMPOSANT SECTION SORTABLE WRAPPER ============
 
-const blockTypes = [
-  { value: 'text', label: 'Texte', icon: FileText, color: 'bg-blue-500' },
-  { value: 'image', label: 'Image', icon: Image, color: 'bg-green-500' },
-  { value: 'video', label: 'Vidéo', icon: Video, color: 'bg-red-500' },
-  { value: 'tip', label: 'Astuce', icon: Lightbulb, color: 'bg-yellow-500' },
-  { value: 'example', label: 'Exemple', icon: Code, color: 'bg-purple-500' },
-];
-
-const getBlockTypeInfo = (type: string) => {
-  return blockTypes.find((t) => t.value === type) || blockTypes[0];
-};
-
-const MAX_BLOCKS_PER_SECTION = 6;
-const MAX_CONTENT_LENGTH = 1500;
-
-// ============ COMPOSANT BLOC SORTABLE ============
-
-interface SortableBlockItemProps {
-  block: SectionBlock;
-  onEdit: (block: SectionBlock) => void;
-  onDelete: (id: string) => void;
-}
-
-function SortableBlockItem({ block, onEdit, onDelete }: SortableBlockItemProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: block.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  const typeInfo = getBlockTypeInfo(block.block_type);
-  const Icon = typeInfo.icon;
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-center gap-3 p-3 rounded-md border bg-background hover:bg-accent/30 transition-colors group"
-    >
-      <button
-        type="button"
-        className="cursor-grab active:cursor-grabbing touch-none"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </button>
-      
-      <div className={`p-1.5 rounded ${typeInfo.color}`}>
-        <Icon className="h-3 w-3 text-white" />
-      </div>
-      
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">{typeInfo.label}</Badge>
-        </div>
-        <p className="text-xs text-muted-foreground truncate mt-0.5">
-          {block.block_type === 'image' && block.image_url
-            ? block.alt_text || 'Image'
-            : block.block_type === 'video' && block.video_url
-            ? block.alt_text || 'Vidéo'
-            : block.content.substring(0, 60)}
-          {block.content.length > 60 && '...'}
-        </p>
-      </div>
-
-      {block.block_type === 'image' && block.image_url && (
-        <img
-          src={block.image_url}
-          alt={block.alt_text || ''}
-          className="h-8 w-12 object-cover rounded"
-        />
-      )}
-
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => onEdit(block)}
-        >
-          <Pencil className="h-3 w-3" />
-        </Button>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-destructive">
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Supprimer ce bloc ?</AlertDialogTitle>
-              <AlertDialogDescription>Cette action est irréversible.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Annuler</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => onDelete(block.id)}
-                className="bg-destructive text-destructive-foreground"
-              >
-                Supprimer
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-    </div>
-  );
-}
-
-// ============ COMPOSANT SECTION/CARTE ============
-
-interface SectionCardProps {
+interface SortableSectionWrapperProps {
   section: LessonSection;
   onEditSection: (section: LessonSection) => void;
   onDeleteSection: (id: string) => void;
-  onAddBlock: (sectionId: string) => void;
-  onEditBlock: (block: SectionBlock, sectionId: string) => void;
-  onDeleteBlock: (blockId: string) => void;
-  onReorderBlocks: (sectionId: string, blocks: SectionBlock[]) => void;
-  onPreview: (section: LessonSection) => void;
+  children: React.ReactNode;
 }
 
-function SectionCard({
+function SortableSectionWrapper({
   section,
   onEditSection,
   onDeleteSection,
-  onAddBlock,
-  onEditBlock,
-  onDeleteBlock,
-  onReorderBlocks,
-  onPreview,
-}: SectionCardProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  children,
+}: SortableSectionWrapperProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: section.id,
   });
@@ -233,280 +97,55 @@ function SectionCard({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  const handleBlockDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id && section.blocks) {
-      const oldIndex = section.blocks.findIndex((b) => b.id === active.id);
-      const newIndex = section.blocks.findIndex((b) => b.id === over.id);
-      const reordered = arrayMove(section.blocks, oldIndex, newIndex);
-      onReorderBlocks(section.id, reordered);
-    }
-  };
-
-  const blocksCount = section.blocks?.length || 0;
-  const canAddMoreBlocks = blocksCount < MAX_BLOCKS_PER_SECTION;
-
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="rounded-lg border bg-card overflow-hidden"
-    >
-      {/* Header de la section */}
-      <div className="flex items-center gap-3 p-4 bg-muted/30 border-b">
+    <div ref={setNodeRef} style={style} className="relative group">
+      {/* Actions de section flottantes */}
+      <div className="absolute -left-12 top-3 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
         <button
           type="button"
-          className="cursor-grab active:cursor-grabbing touch-none"
+          className="p-1.5 rounded bg-background border shadow-sm hover:bg-muted cursor-grab active:cursor-grabbing"
           {...attributes}
           {...listeners}
         >
-          <GripVertical className="h-5 w-5 text-muted-foreground" />
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
         </button>
-
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <LayoutGrid className="h-4 w-4" />
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <p className="font-medium truncate">
-            {section.title || `Section ${section.order_index}`}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {blocksCount} bloc{blocksCount > 1 ? 's' : ''} • Max {MAX_BLOCKS_PER_SECTION}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => onAddBlock(section.id)}
-            disabled={!canAddMoreBlocks}
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Bloc
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => onPreview(section)}
-            title="Prévisualiser sur mobile"
-          >
-            <Smartphone className="h-3 w-3 mr-1" />
-            Aperçu
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8"
-            onClick={() => onEditSection(section)}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-destructive">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Supprimer cette section ?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Cette action supprimera également tous les blocs de cette section.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => onDeleteSection(section.id)}
-                  className="bg-destructive text-destructive-foreground"
-                >
-                  Supprimer
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8"
-            onClick={() => setIsExpanded(!isExpanded)}
-          >
-            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </Button>
-        </div>
-      </div>
-
-      {/* Contenu (blocs) */}
-      {isExpanded && (
-        <div className="p-4">
-          {blocksCount === 0 ? (
-            <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
-              <p className="text-sm">Aucun bloc dans cette section</p>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="mt-2"
-                onClick={() => onAddBlock(section.id)}
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Ajouter un bloc
-              </Button>
-            </div>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleBlockDragEnd}
-            >
-              <SortableContext
-                items={section.blocks?.map((b) => b.id) || []}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-2">
-                  {section.blocks?.map((block) => (
-                    <SortableBlockItem
-                      key={block.id}
-                      block={block}
-                      onEdit={(b) => onEditBlock(b, section.id)}
-                      onDelete={onDeleteBlock}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============ FORMULAIRE DE BLOC ============
-
-interface BlockFormProps {
-  form: BlockFormData;
-  setForm: (f: BlockFormData) => void;
-  conceptId: string;
-}
-
-function BlockForm({ form, setForm, conceptId }: BlockFormProps) {
-  return (
-    <div className="space-y-4 py-4">
-      <div className="space-y-2">
-        <Label>Type de bloc</Label>
-        <Select
-          value={form.block_type}
-          onValueChange={(v: BlockFormData['block_type']) =>
-            setForm({ ...form, block_type: v })
-          }
+        <button
+          type="button"
+          className="p-1.5 rounded bg-background border shadow-sm hover:bg-muted"
+          onClick={() => onEditSection(section)}
         >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {blockTypes.map((type) => {
-              const Icon = type.icon;
-              return (
-                <SelectItem key={type.value} value={type.value}>
-                  <div className="flex items-center gap-2">
-                    <div className={`p-1 rounded ${type.color}`}>
-                      <Icon className="h-3 w-3 text-white" />
-                    </div>
-                    {type.label}
-                  </div>
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
+          <Pencil className="h-4 w-4 text-muted-foreground" />
+        </button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button
+              type="button"
+              className="p-1.5 rounded bg-background border shadow-sm hover:bg-destructive/10 text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Supprimer cette section ?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Cette action supprimera également tous les blocs de cette section.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => onDeleteSection(section.id)}
+                className="bg-destructive text-destructive-foreground"
+              >
+                Supprimer
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
-      {form.block_type === 'image' ? (
-        <>
-          <ImageUpload
-            value={form.image_url}
-            onChange={(url) => setForm({ ...form, image_url: url })}
-            bucket="lesson-images"
-            folder={conceptId}
-            label="Image"
-            aspectRatio="video"
-            showUrlInput={true}
-          />
-          <div className="space-y-2">
-            <Label>Texte alternatif</Label>
-            <Input
-              value={form.alt_text || ''}
-              onChange={(e) => setForm({ ...form, alt_text: e.target.value })}
-              placeholder="Description de l'image pour l'accessibilité"
-            />
-          </div>
-          <RichTextEditor
-            value={form.content}
-            onChange={(value) => setForm({ ...form, content: value })}
-            label="Légende (optionnel)"
-            placeholder="Texte explicatif pour accompagner l'image..."
-            rows={3}
-            maxLength={MAX_CONTENT_LENGTH}
-          />
-        </>
-      ) : form.block_type === 'video' ? (
-        <>
-          <div className="space-y-2">
-            <Label>URL de la vidéo</Label>
-            <Input
-              value={form.video_url || ''}
-              onChange={(e) => setForm({ ...form, video_url: e.target.value })}
-              placeholder="https://youtube.com/watch?v=..."
-            />
-            <p className="text-xs text-muted-foreground">
-              Supporte YouTube, Vimeo et les liens vidéo directs
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label>Description</Label>
-            <Input
-              value={form.alt_text || ''}
-              onChange={(e) => setForm({ ...form, alt_text: e.target.value })}
-              placeholder="Description de la vidéo"
-            />
-          </div>
-          <RichTextEditor
-            value={form.content}
-            onChange={(value) => setForm({ ...form, content: value })}
-            label="Texte associé (optionnel)"
-            placeholder="Texte explicatif pour accompagner la vidéo..."
-            rows={3}
-            maxLength={MAX_CONTENT_LENGTH}
-          />
-        </>
-      ) : (
-        <RichTextEditor
-          value={form.content}
-          onChange={(value) => setForm({ ...form, content: value })}
-          label="Contenu *"
-          placeholder={
-            form.block_type === 'tip'
-              ? 'Astuce ou conseil utile...'
-              : form.block_type === 'example'
-              ? 'Exemple concret ou cas pratique...'
-              : 'Contenu du bloc...'
-          }
-          rows={6}
-          maxLength={MAX_CONTENT_LENGTH}
-        />
-      )}
+      {children}
     </div>
   );
 }
@@ -517,6 +156,7 @@ export function ConceptFormPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { data: concept, isLoading } = useConcept(id);
+  const { data: game } = useGame(concept?.game_id);
   const updateConcept = useUpdateConcept();
   const createSection = useCreateSection();
   const updateSection = useUpdateSection();
@@ -537,10 +177,7 @@ export function ConceptFormPage() {
 
   // États des dialogs
   const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
-  const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   const [editingSection, setEditingSection] = useState<LessonSection | null>(null);
-  const [editingBlock, setEditingBlock] = useState<SectionBlock | null>(null);
-  const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
 
   // État de prévisualisation mobile
   const [previewSection, setPreviewSection] = useState<(LessonSection & { blocks: SectionBlock[] }) | null>(null);
@@ -550,14 +187,6 @@ export function ConceptFormPage() {
   const [sectionForm, setSectionForm] = useState<SectionFormData>({
     order_index: 1,
     title: '',
-  });
-  const [blockForm, setBlockForm] = useState<BlockFormData>({
-    block_type: 'text',
-    order_index: 1,
-    content: '',
-    image_url: null,
-    video_url: null,
-    alt_text: null,
   });
 
   const sensors = useSensors(
@@ -657,55 +286,6 @@ export function ConceptFormPage() {
 
   // ============ HANDLERS BLOCS ============
 
-  const openAddBlockDialog = (sectionId: string) => {
-    const section = concept?.sections?.find((s) => s.id === sectionId);
-    const blocksCount = section?.blocks?.length || 0;
-
-    setEditingBlock(null);
-    setCurrentSectionId(sectionId);
-    setBlockForm({
-      block_type: 'text',
-      order_index: blocksCount + 1,
-      content: '',
-      image_url: null,
-      video_url: null,
-      alt_text: null,
-    });
-    setIsBlockDialogOpen(true);
-  };
-
-  const openEditBlockDialog = (block: SectionBlock, sectionId: string) => {
-    setEditingBlock(block);
-    setCurrentSectionId(sectionId);
-    setBlockForm({
-      block_type: block.block_type,
-      order_index: block.order_index,
-      content: block.content,
-      image_url: block.image_url,
-      video_url: block.video_url,
-      alt_text: block.alt_text,
-    });
-    setIsBlockDialogOpen(true);
-  };
-
-  const handleSaveBlock = async () => {
-    if (!id || !currentSectionId) return;
-    if (editingBlock) {
-      await updateBlock.mutateAsync({
-        id: editingBlock.id,
-        conceptId: id,
-        data: blockForm,
-      });
-    } else {
-      await createBlock.mutateAsync({
-        sectionId: currentSectionId,
-        conceptId: id,
-        data: blockForm,
-      });
-    }
-    setIsBlockDialogOpen(false);
-  };
-
   const handleDeleteBlock = (blockId: string) => {
     if (!id) return;
     deleteBlock.mutate({ id: blockId, conceptId: id });
@@ -718,6 +298,44 @@ export function ConceptFormPage() {
       order_index: index + 1,
     }));
     reorderBlocks.mutate({ conceptId: id, blocks: updates });
+  };
+
+  // ============ HANDLERS INLINE (SECTION EDITOR) ============
+
+  const handleUpdateBlockInline = (blockId: string, data: Partial<BlockFormData>) => {
+    if (!id) return;
+    updateBlock.mutate({ id: blockId, conceptId: id, data });
+  };
+
+  const handleCreateBlockInline = (sectionId: string, data: BlockFormData, insertIndex?: number) => {
+    if (!id) return;
+    
+    const section = concept?.sections?.find((s) => s.id === sectionId);
+    const blocks = section?.blocks || [];
+    
+    // Calculer le bon order_index
+    let orderIndex: number;
+    if (insertIndex !== undefined && blocks.length > 0) {
+      // Insertion à une position spécifique
+      // On doit d'abord réordonner les blocs existants pour faire de la place
+      const blocksToUpdate = blocks
+        .filter((b) => b.order_index > insertIndex)
+        .map((b) => ({ id: b.id, order_index: b.order_index + 1 }));
+      
+      if (blocksToUpdate.length > 0) {
+        reorderBlocks.mutate({ conceptId: id, blocks: blocksToUpdate });
+      }
+      
+      orderIndex = insertIndex + 1;
+    } else {
+      orderIndex = blocks.length + 1;
+    }
+    
+    createBlock.mutate({
+      sectionId,
+      conceptId: id,
+      data: { ...data, order_index: orderIndex },
+    });
   };
 
   // ============ CALCUL TEMPS ESTIMÉ ============
@@ -843,22 +461,28 @@ export function ConceptFormPage() {
                     items={concept.sections?.map((s) => s.id) || []}
                     strategy={verticalListSortingStrategy}
                   >
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       {concept.sections?.map((section) => (
-                        <SectionCard
+                        <SortableSectionWrapper
                           key={section.id}
                           section={section}
                           onEditSection={openEditSectionDialog}
                           onDeleteSection={handleDeleteSection}
-                          onAddBlock={openAddBlockDialog}
-                          onEditBlock={openEditBlockDialog}
-                          onDeleteBlock={handleDeleteBlock}
-                          onReorderBlocks={handleReorderBlocks}
-                          onPreview={(s) => {
-                            setPreviewSection(s as LessonSection & { blocks: SectionBlock[] });
-                            setIsPreviewOpen(true);
-                          }}
-                        />
+                        >
+                          <SectionEditor
+                            section={section}
+                            conceptId={id!}
+                            gameSlug={game?.slug || game?.name}
+                            onUpdateBlock={handleUpdateBlockInline}
+                            onCreateBlock={handleCreateBlockInline}
+                            onDeleteBlock={handleDeleteBlock}
+                            onReorderBlocks={handleReorderBlocks}
+                            onPreview={() => {
+                              setPreviewSection(section as LessonSection & { blocks: SectionBlock[] });
+                              setIsPreviewOpen(true);
+                            }}
+                          />
+                        </SortableSectionWrapper>
                       ))}
                     </div>
                   </SortableContext>
@@ -991,35 +615,6 @@ export function ConceptFormPage() {
               disabled={createSection.isPending || updateSection.isPending}
             >
               {editingSection ? 'Enregistrer' : 'Créer'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ============ DIALOG BLOC ============ */}
-      <Dialog open={isBlockDialogOpen} onOpenChange={setIsBlockDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingBlock ? 'Modifier le bloc' : 'Nouveau bloc'}
-            </DialogTitle>
-          </DialogHeader>
-          <BlockForm form={blockForm} setForm={setBlockForm} conceptId={id!} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsBlockDialogOpen(false)}>
-              Annuler
-            </Button>
-            <Button
-              onClick={handleSaveBlock}
-              disabled={
-                createBlock.isPending ||
-                updateBlock.isPending ||
-                (blockForm.block_type !== 'image' &&
-                  blockForm.block_type !== 'video' &&
-                  !blockForm.content)
-              }
-            >
-              {editingBlock ? 'Enregistrer' : 'Créer'}
             </Button>
           </DialogFooter>
         </DialogContent>
