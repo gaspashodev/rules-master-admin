@@ -32,8 +32,18 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import type { LessonSection, SectionBlock, BlockFormData, BlockType } from '@/types/database';
-import type { ListItem, ListItemsContent, InfoBarContent, InfoBarItem, FloatingImageContent, HeadingContent, QuoteContent } from '@/types/database';
+import type { 
+  LessonSection, 
+  SectionBlock, 
+  BlockFormData, 
+  BlockType,
+  BlockMetadata,
+  HeadingMetadata,
+  InfoBarMetadata,
+  ListItemsMetadata,
+  FloatingImageMetadata,
+  ListItem,
+} from '@/types/database';
 import {
   Plus,
   GripVertical,
@@ -103,21 +113,34 @@ const getBlockConfig = (type: BlockType): BlockTypeConfig => {
 const MAX_BLOCKS_PER_SECTION = 6;
 const MAX_CONTENT_LENGTH = 1500;
 
-// ============ HELPERS JSON ============
+// ============ HELPERS LECTURE METADATA ============
 
-function parseJsonContent<T>(content: string, defaultValue: T): T {
-  try {
-    return content ? JSON.parse(content) : defaultValue;
-  } catch {
-    return defaultValue;
-  }
+function getBlockInfoBar(block: SectionBlock): InfoBarMetadata {
+  return (block.metadata as InfoBarMetadata) || {};
+}
+
+function getBlockListItems(block: SectionBlock): ListItemsMetadata {
+  return (block.metadata as ListItemsMetadata) || { items: [] };
+}
+
+function getBlockFloatingImage(block: SectionBlock): FloatingImageMetadata {
+  return (block.metadata as FloatingImageMetadata) || { position: 'bottom-right', height: 50 };
+}
+
+function getBlockHeading(block: SectionBlock): { text: string; emoji?: string } {
+  const meta = block.metadata as HeadingMetadata | null;
+  return { text: block.content || '', emoji: meta?.emoji };
+}
+
+function getBlockQuote(block: SectionBlock): string {
+  return block.content || '';
 }
 
 // ============ INLINE EDITOR COMPONENT ============
 
 interface InlineBlockEditorProps {
   block: SectionBlock;
-  onContentChange: (content: string) => void;
+  onBlockChange: (data: Partial<BlockFormData>) => void;
   onTypeChange: (newType: BlockType) => void;
   isSelected: boolean;
   onSelect: () => void;
@@ -125,40 +148,45 @@ interface InlineBlockEditorProps {
 
 function InlineBlockEditor({
   block,
-  onContentChange,
+  onBlockChange,
   onTypeChange,
   isSelected,
   onSelect,
 }: InlineBlockEditorProps) {
   const config = getBlockConfig(block.block_type);
 
-  // Pour heading et quote, on a une structure JSON
-  const [headingContent, setHeadingContent] = useState<HeadingContent>(() =>
-    block.block_type === 'heading' ? parseJsonContent(block.content, { text: '' }) : { text: '' }
-  );
-  const [quoteContent, setQuoteContent] = useState<QuoteContent>(() =>
-    block.block_type === 'quote' ? parseJsonContent(block.content, { text: '' }) : { text: '' }
-  );
+  // Pour heading: texte dans content, emoji dans metadata
+  const headingData = getBlockHeading(block);
+  const [headingText, setHeadingText] = useState(headingData.text);
+  const [headingEmoji, setHeadingEmoji] = useState(headingData.emoji || '');
+  
+  // Pour quote: texte directement dans content
+  const [quoteText, setQuoteText] = useState(getBlockQuote(block));
 
-  // Synchroniser quand le type change
+  // Synchroniser quand le bloc change
   useEffect(() => {
     if (block.block_type === 'heading') {
-      setHeadingContent(parseJsonContent(block.content, { text: '' }));
+      const data = getBlockHeading(block);
+      setHeadingText(data.text);
+      setHeadingEmoji(data.emoji || '');
     } else if (block.block_type === 'quote') {
-      setQuoteContent(parseJsonContent(block.content, { text: '' }));
+      setQuoteText(getBlockQuote(block));
     }
-  }, [block.block_type, block.content]);
+  }, [block.block_type, block.content, block.metadata]);
 
-  const handleHeadingChange = (updates: Partial<HeadingContent>) => {
-    const newContent = { ...headingContent, ...updates };
-    setHeadingContent(newContent);
-    onContentChange(JSON.stringify(newContent));
+  const handleHeadingChange = (text: string, emoji: string) => {
+    setHeadingText(text);
+    setHeadingEmoji(emoji);
+    const metadata: HeadingMetadata | null = emoji ? { emoji } : null;
+    onBlockChange({ 
+      content: text || null,
+      metadata 
+    });
   };
 
   const handleQuoteChange = (text: string) => {
-    const newContent = { text };
-    setQuoteContent(newContent);
-    onContentChange(JSON.stringify(newContent));
+    setQuoteText(text);
+    onBlockChange({ content: text || null, metadata: null });
   };
 
   const isTextualType = TEXTUAL_BLOCK_TYPES.includes(block.block_type);
@@ -217,14 +245,14 @@ function InlineBlockEditor({
           <div className="space-y-2">
             <div className="flex gap-2">
               <Input
-                value={headingContent.emoji || ''}
-                onChange={(e) => handleHeadingChange({ emoji: e.target.value })}
+                value={headingEmoji}
+                onChange={(e) => handleHeadingChange(headingText, e.target.value)}
                 placeholder="🎯"
                 className="w-14 text-center text-lg"
               />
               <Input
-                value={headingContent.text}
-                onChange={(e) => handleHeadingChange({ text: e.target.value })}
+                value={headingText}
+                onChange={(e) => handleHeadingChange(e.target.value, headingEmoji)}
                 placeholder="Titre de la section..."
                 className="flex-1 font-semibold"
               />
@@ -232,7 +260,7 @@ function InlineBlockEditor({
           </div>
         ) : block.block_type === 'quote' ? (
           <Textarea
-            value={quoteContent.text}
+            value={quoteText}
             onChange={(e) => handleQuoteChange(e.target.value)}
             placeholder="Texte de la citation..."
             rows={3}
@@ -240,8 +268,8 @@ function InlineBlockEditor({
           />
         ) : (
           <RichTextEditor
-            value={block.content}
-            onChange={onContentChange}
+            value={block.content || ''}
+            onChange={(value) => onBlockChange({ content: value || null, metadata: null })}
             placeholder={
               block.block_type === 'tip'
                 ? '💡 Astuce ou conseil utile...'
@@ -309,17 +337,31 @@ function ComplexBlockPreview({ block, onClick }: ComplexBlockPreviewProps) {
         );
 
       case 'info_bar': {
-        const infoContent = parseJsonContent<InfoBarContent>(block.content, { items: [] });
-        const items = infoContent.items || [];
+        const infoData = getBlockInfoBar(block);
+        const hasData = infoData.duration || infoData.players || infoData.age;
         return (
           <div className="flex items-center gap-4 text-sm">
-            {items.length > 0 ? (
-              items.map((item, idx) => (
-                <span key={idx} className="flex items-center gap-1">
-                  {item.icon && <span className="text-muted-foreground">{item.icon}</span>}
-                  <span className="text-muted-foreground">{item.label}:</span> {item.value || '—'}
-                </span>
-              ))
+            {hasData ? (
+              <>
+                {infoData.duration && (
+                  <span className="flex items-center gap-1">
+                    <span className="text-muted-foreground">⏱</span>
+                    <span className="text-muted-foreground">Durée:</span> {infoData.duration}
+                  </span>
+                )}
+                {infoData.players && (
+                  <span className="flex items-center gap-1">
+                    <span className="text-muted-foreground">👥</span>
+                    <span className="text-muted-foreground">Joueurs:</span> {infoData.players}
+                  </span>
+                )}
+                {infoData.age && (
+                  <span className="flex items-center gap-1">
+                    <span className="text-muted-foreground">🎂</span>
+                    <span className="text-muted-foreground">Âge:</span> {infoData.age}
+                  </span>
+                )}
+              </>
             ) : (
               <span className="text-muted-foreground">Aucune info configurée</span>
             )}
@@ -328,24 +370,24 @@ function ComplexBlockPreview({ block, onClick }: ComplexBlockPreviewProps) {
       }
 
       case 'list_items': {
-        const listContent = parseJsonContent<ListItemsContent>(block.content, { items: [] });
+        const listData = getBlockListItems(block);
         return (
           <div className="space-y-1">
-            {listContent.title && (
-              <p className="text-sm font-medium">{listContent.title}</p>
+            {listData.title && (
+              <p className="text-sm font-medium">{listData.title}</p>
             )}
             <p className="text-xs text-muted-foreground">
-              {listContent.items.length} élément{listContent.items.length > 1 ? 's' : ''}
+              {listData.items.length} élément{listData.items.length > 1 ? 's' : ''}
             </p>
-            {listContent.items.slice(0, 2).map((item, i) => (
+            {listData.items.slice(0, 2).map((item, i) => (
               <div key={i} className="flex items-center gap-2 text-xs">
                 <span>{item.icon || '•'}</span>
                 <span className="truncate">{item.name}</span>
               </div>
             ))}
-            {listContent.items.length > 2 && (
+            {listData.items.length > 2 && (
               <p className="text-xs text-muted-foreground">
-                + {listContent.items.length - 2} autre{listContent.items.length > 3 ? 's' : ''}
+                + {listData.items.length - 2} autre{listData.items.length > 3 ? 's' : ''}
               </p>
             )}
           </div>
@@ -353,10 +395,7 @@ function ComplexBlockPreview({ block, onClick }: ComplexBlockPreviewProps) {
       }
 
       case 'floating_image': {
-        const floatContent = parseJsonContent<FloatingImageContent>(block.content, {
-          position: 'bottom-right',
-          height: 50,
-        });
+        const floatData = getBlockFloatingImage(block);
         return (
           <div className="flex items-center gap-3">
             {block.image_url ? (
@@ -371,8 +410,8 @@ function ComplexBlockPreview({ block, onClick }: ComplexBlockPreviewProps) {
               </div>
             )}
             <div className="text-sm">
-              <p>Position: {floatContent.position === 'bottom-right' ? 'Bas droite' : 'Bas gauche'}</p>
-              <p className="text-xs text-muted-foreground">Hauteur: {floatContent.height}%</p>
+              <p>Position: {floatData.position === 'bottom-right' ? 'Bas droite' : 'Bas gauche'}</p>
+              <p className="text-xs text-muted-foreground">Hauteur: {floatData.height}%</p>
             </div>
           </div>
         );
@@ -537,109 +576,63 @@ function InsertBlockButton({ onInsert, disabled }: InsertBlockButtonProps) {
 // ============ INFO BAR EDITOR ============
 
 interface InfoBarEditorProps {
-  content: InfoBarContent;
-  onChange: (c: InfoBarContent) => void;
+  metadata: InfoBarMetadata;
+  onChange: (m: InfoBarMetadata) => void;
 }
 
-function InfoBarEditor({ content, onChange }: InfoBarEditorProps) {
-  const items = content.items || [];
-  const canAddMore = items.length < 3;
-  const canRemove = items.length > 2;
-
-  const addItem = () => {
-    if (!canAddMore) return;
-    onChange({
-      items: [...items, { label: '', value: '', icon: '' }],
-    });
-  };
-
-  const removeItem = (index: number) => {
-    if (!canRemove) return;
-    onChange({
-      items: items.filter((_, i) => i !== index),
-    });
-  };
-
-  const updateItem = (index: number, updates: Partial<InfoBarItem>) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], ...updates };
-    onChange({ items: newItems });
-  };
-
-  // Initialiser avec 2 items par défaut si vide
-  if (items.length === 0) {
-    onChange({
-      items: [
-        { label: 'Durée', value: '', icon: '⏱' },
-        { label: 'Joueurs', value: '', icon: '👥' },
-      ],
-    });
-    return null;
-  }
-
+function InfoBarEditor({ metadata, onChange }: InfoBarEditorProps) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Label>Champs ({items.length}/3)</Label>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={addItem}
-          disabled={!canAddMore}
-        >
-          <Plus className="h-3 w-3 mr-1" />
-          Ajouter un champ
-        </Button>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Affiche des informations rapides sur le jeu. Tous les champs sont optionnels.
+      </p>
 
-      <div className="space-y-3">
-        {items.map((item, index) => (
-          <div key={index} className="p-3 border rounded-lg bg-muted/30">
-            <div className="flex gap-2 items-end">
-              <div className="space-y-1 w-16">
-                <Label className="text-xs">Icône</Label>
-                <Input
-                  value={item.icon || ''}
-                  onChange={(e) => updateItem(index, { icon: e.target.value })}
-                  placeholder="⏱"
-                  className="text-center"
-                />
-              </div>
-              <div className="flex-1 space-y-1">
-                <Label className="text-xs">Libellé *</Label>
-                <Input
-                  value={item.label}
-                  onChange={(e) => updateItem(index, { label: e.target.value })}
-                  placeholder="Durée"
-                />
-              </div>
-              <div className="flex-1 space-y-1">
-                <Label className="text-xs">Valeur *</Label>
-                <Input
-                  value={item.value}
-                  onChange={(e) => updateItem(index, { value: e.target.value })}
-                  placeholder="30 min"
-                />
-              </div>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="text-destructive h-9 w-9"
-                onClick={() => removeItem(index)}
-                disabled={!canRemove}
-                title={canRemove ? 'Supprimer' : 'Minimum 2 champs'}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+      <div className="grid grid-cols-1 gap-4">
+        <div className="p-4 border rounded-lg bg-muted/30">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⏱</span>
+            <div className="flex-1 space-y-1">
+              <Label className="text-xs">Durée de la partie</Label>
+              <Input
+                value={metadata.duration || ''}
+                onChange={(e) => onChange({ ...metadata, duration: e.target.value || undefined })}
+                placeholder="30 min"
+              />
             </div>
           </div>
-        ))}
+        </div>
+
+        <div className="p-4 border rounded-lg bg-muted/30">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">👥</span>
+            <div className="flex-1 space-y-1">
+              <Label className="text-xs">Nombre de joueurs</Label>
+              <Input
+                value={metadata.players || ''}
+                onChange={(e) => onChange({ ...metadata, players: e.target.value || undefined })}
+                placeholder="2-4"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border rounded-lg bg-muted/30">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🎂</span>
+            <div className="flex-1 space-y-1">
+              <Label className="text-xs">Âge minimum</Label>
+              <Input
+                value={metadata.age || ''}
+                onChange={(e) => onChange({ ...metadata, age: e.target.value || undefined })}
+                placeholder="10+"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Affiche 2 ou 3 infos sous forme de petites cartes horizontales
+        Les champs remplis s'afficheront sous forme de petites cartes horizontales sur mobile.
       </p>
     </div>
   );
@@ -648,31 +641,31 @@ function InfoBarEditor({ content, onChange }: InfoBarEditorProps) {
 // ============ LIST ITEMS EDITOR ============
 
 interface ListItemsEditorProps {
-  content: ListItemsContent;
-  onChange: (c: ListItemsContent) => void;
+  metadata: ListItemsMetadata;
+  onChange: (m: ListItemsMetadata) => void;
 }
 
-function ListItemsEditor({ content, onChange }: ListItemsEditorProps) {
-  const colors: Array<ListItem['color']> = ['yellow', 'blue', 'green', 'purple', 'red'];
+function ListItemsEditor({ metadata, onChange }: ListItemsEditorProps) {
+  const colors: Array<ListItem['color']> = ['yellow', 'blue', 'green', 'purple', 'red', 'orange', 'pink', 'cyan'];
 
   const addItem = () => {
     onChange({
-      ...content,
-      items: [...content.items, { name: '', icon: '📌', color: 'blue' }],
+      ...metadata,
+      items: [...metadata.items, { name: '', icon: '📌', color: 'blue' }],
     });
   };
 
   const removeItem = (index: number) => {
     onChange({
-      ...content,
-      items: content.items.filter((_, i) => i !== index),
+      ...metadata,
+      items: metadata.items.filter((_, i) => i !== index),
     });
   };
 
   const updateItem = (index: number, updates: Partial<ListItem>) => {
-    const newItems = [...content.items];
+    const newItems = [...metadata.items];
     newItems[index] = { ...newItems[index], ...updates };
-    onChange({ ...content, items: newItems });
+    onChange({ ...metadata, items: newItems });
   };
 
   return (
@@ -680,22 +673,22 @@ function ListItemsEditor({ content, onChange }: ListItemsEditorProps) {
       <div className="space-y-2">
         <Label>Titre de la liste (optionnel)</Label>
         <Input
-          value={content.title || ''}
-          onChange={(e) => onChange({ ...content, title: e.target.value })}
+          value={metadata.title || ''}
+          onChange={(e) => onChange({ ...metadata, title: e.target.value || undefined })}
           placeholder="🎯 3 chemins vers la victoire"
         />
       </div>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <Label>Éléments ({content.items.length})</Label>
+          <Label>Éléments ({metadata.items.length})</Label>
           <Button type="button" size="sm" variant="outline" onClick={addItem}>
             <Plus className="h-3 w-3 mr-1" />
             Ajouter
           </Button>
         </div>
 
-        {content.items.map((item, index) => (
+        {metadata.items.map((item, index) => (
           <div key={index} className="p-3 border rounded-lg space-y-2 bg-muted/30">
             <div className="flex gap-2">
               <div className="space-y-1 w-16">
@@ -766,7 +759,7 @@ function ListItemsEditor({ content, onChange }: ListItemsEditorProps) {
           </div>
         ))}
 
-        {content.items.length === 0 && (
+        {metadata.items.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-4">
             Aucun élément. Cliquez sur "Ajouter" pour commencer.
           </p>
@@ -798,16 +791,17 @@ function ComplexBlockModal({
   const [form, setForm] = useState<BlockFormData>({
     block_type: 'image',
     order_index: 1,
-    content: '',
+    content: null,
     image_url: null,
     video_url: null,
     alt_text: null,
+    metadata: null,
   });
 
-  // États pour les contenus structurés
-  const [listContent, setListContent] = useState<ListItemsContent>({ items: [] });
-  const [infoBarContent, setInfoBarContent] = useState<InfoBarContent>({ items: [] });
-  const [floatingContent, setFloatingContent] = useState<FloatingImageContent>({
+  // États pour les métadonnées structurées (nouveau format)
+  const [listMetadata, setListMetadata] = useState<ListItemsMetadata>({ items: [] });
+  const [infoBarMetadata, setInfoBarMetadata] = useState<InfoBarMetadata>({});
+  const [floatingMetadata, setFloatingMetadata] = useState<FloatingImageMetadata>({
     position: 'bottom-right',
     height: 50,
   });
@@ -822,34 +816,45 @@ function ComplexBlockModal({
         image_url: block.image_url,
         video_url: block.video_url,
         alt_text: block.alt_text,
+        metadata: block.metadata,
       });
 
+      // Charger les métadonnées (avec rétrocompatibilité)
       if (block.block_type === 'list_items') {
-        setListContent(parseJsonContent(block.content, { items: [] }));
+        setListMetadata(getBlockListItems(block));
       } else if (block.block_type === 'info_bar') {
-        setInfoBarContent(parseJsonContent(block.content, { items: [] }));
+        setInfoBarMetadata(getBlockInfoBar(block));
       } else if (block.block_type === 'floating_image') {
-        setFloatingContent(parseJsonContent(block.content, { position: 'bottom-right', height: 50 }));
+        setFloatingMetadata(getBlockFloatingImage(block));
       }
     }
   }, [block]);
 
   const handleSave = () => {
-    let content = form.content;
+    let content: string | null = form.content;
+    let metadata: BlockMetadata | null = null;
 
     switch (form.block_type) {
       case 'list_items':
-        content = JSON.stringify(listContent);
+        content = null; // Plus de content pour list_items
+        metadata = listMetadata;
         break;
       case 'info_bar':
-        content = JSON.stringify(infoBarContent);
+        content = null; // Plus de content pour info_bar
+        // Ne sauvegarder que si au moins un champ est rempli
+        const hasInfoData = infoBarMetadata.duration || infoBarMetadata.players || infoBarMetadata.age;
+        metadata = hasInfoData ? infoBarMetadata : null;
         break;
       case 'floating_image':
-        content = JSON.stringify(floatingContent);
+        content = null; // Plus de content pour floating_image
+        metadata = floatingMetadata;
         break;
+      default:
+        // Pour image et video, content reste utilisé normalement
+        metadata = null;
     }
 
-    onSave({ ...form, content });
+    onSave({ ...form, content, metadata });
     onClose();
   };
 
@@ -890,8 +895,8 @@ function ComplexBlockModal({
                 />
               </div>
               <RichTextEditor
-                value={form.content}
-                onChange={(value) => setForm({ ...form, content: value })}
+                value={form.content || ''}
+                onChange={(value) => setForm({ ...form, content: value || null })}
                 label="Légende (optionnel)"
                 placeholder="Texte explicatif pour accompagner l'image..."
                 rows={3}
@@ -923,8 +928,8 @@ function ComplexBlockModal({
                 />
               </div>
               <RichTextEditor
-                value={form.content}
-                onChange={(value) => setForm({ ...form, content: value })}
+                value={form.content || ''}
+                onChange={(value) => setForm({ ...form, content: value || null })}
                 label="Texte associé (optionnel)"
                 placeholder="Texte explicatif pour accompagner la vidéo..."
                 rows={3}
@@ -935,12 +940,12 @@ function ComplexBlockModal({
 
           {/* INFO_BAR */}
           {form.block_type === 'info_bar' && (
-            <InfoBarEditor content={infoBarContent} onChange={setInfoBarContent} />
+            <InfoBarEditor metadata={infoBarMetadata} onChange={setInfoBarMetadata} />
           )}
 
           {/* LIST_ITEMS */}
           {form.block_type === 'list_items' && (
-            <ListItemsEditor content={listContent} onChange={setListContent} />
+            <ListItemsEditor metadata={listMetadata} onChange={setListMetadata} />
           )}
 
           {/* FLOATING_IMAGE */}
@@ -960,9 +965,9 @@ function ComplexBlockModal({
                 <div className="space-y-2">
                   <Label>Position</Label>
                   <Select
-                    value={floatingContent.position}
+                    value={floatingMetadata.position}
                     onValueChange={(v: 'bottom-right' | 'bottom-left') =>
-                      setFloatingContent({ ...floatingContent, position: v })
+                      setFloatingMetadata({ ...floatingMetadata, position: v })
                     }
                   >
                     <SelectTrigger>
@@ -975,14 +980,14 @@ function ComplexBlockModal({
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Hauteur ({floatingContent.height}% de l'écran)</Label>
+                  <Label>Hauteur ({floatingMetadata.height}% de l'écran)</Label>
                   <Input
                     type="number"
                     min={20}
                     max={80}
-                    value={floatingContent.height}
+                    value={floatingMetadata.height}
                     onChange={(e) =>
-                      setFloatingContent({ ...floatingContent, height: parseInt(e.target.value) || 50 })
+                      setFloatingMetadata({ ...floatingMetadata, height: parseInt(e.target.value) || 50 })
                     }
                   />
                 </div>
@@ -1047,43 +1052,86 @@ export function SectionEditor({
   };
 
   const handleInsertBlock = (type: BlockType, insertIndex: number) => {
-    const isTextual = TEXTUAL_BLOCK_TYPES.includes(type);
+    // Nouveau format: content contient le texte, metadata contient les données structurées
+    let content: string | null = null;
+    let metadata: BlockMetadata | null = null;
+    
+    switch (type) {
+      case 'heading':
+        content = ''; // Texte vide par défaut
+        metadata = null; // Pas d'emoji par défaut
+        break;
+      case 'quote':
+        content = ''; // Texte vide par défaut
+        metadata = null;
+        break;
+      case 'text':
+      case 'tip':
+      case 'example':
+        content = ''; // Texte vide par défaut
+        metadata = null;
+        break;
+      case 'info_bar':
+        content = null;
+        metadata = {}; // InfoBarMetadata vide
+        break;
+      case 'list_items':
+        content = null;
+        metadata = { items: [] }; // ListItemsMetadata vide
+        break;
+      case 'floating_image':
+        content = null;
+        metadata = { position: 'bottom-right', height: 50 };
+        break;
+      default:
+        content = null;
+        metadata = null;
+    }
     
     const newBlockData: BlockFormData = {
       block_type: type,
       order_index: insertIndex + 1,
-      content: type === 'heading' ? JSON.stringify({ text: '', emoji: '' }) : 
-               type === 'quote' ? JSON.stringify({ text: '' }) : '',
+      content,
       image_url: null,
       video_url: null,
       alt_text: null,
+      metadata,
     };
 
-    if (!isTextual) {
-      // Pour les blocs complexes, on crée d'abord puis on ouvre la modale
-      onCreateBlock(section.id, newBlockData, insertIndex);
-    } else {
-      onCreateBlock(section.id, newBlockData, insertIndex);
-    }
+    onCreateBlock(section.id, newBlockData, insertIndex);
   };
 
-  const handleContentChange = useCallback(
-    (blockId: string, content: string) => {
-      onUpdateBlock(blockId, { content });
+  const handleBlockChange = useCallback(
+    (blockId: string, data: Partial<BlockFormData>) => {
+      onUpdateBlock(blockId, data);
     },
     [onUpdateBlock]
   );
 
   const handleTypeChange = useCallback(
     (blockId: string, newType: BlockType) => {
-      // Réinitialiser le content selon le nouveau type
-      let newContent = '';
-      if (newType === 'heading') {
-        newContent = JSON.stringify({ text: '', emoji: '' });
-      } else if (newType === 'quote') {
-        newContent = JSON.stringify({ text: '' });
+      // Réinitialiser content et metadata selon le nouveau type
+      let newContent: string | null = null;
+      let newMetadata: BlockMetadata | null = null;
+      
+      switch (newType) {
+        case 'heading':
+          newContent = '';
+          newMetadata = null;
+          break;
+        case 'quote':
+        case 'text':
+        case 'tip':
+        case 'example':
+          newContent = '';
+          newMetadata = null;
+          break;
+        default:
+          newContent = null;
+          newMetadata = null;
       }
-      onUpdateBlock(blockId, { block_type: newType, content: newContent });
+      
+      onUpdateBlock(blockId, { block_type: newType, content: newContent, metadata: newMetadata });
     },
     [onUpdateBlock]
   );
@@ -1187,7 +1235,7 @@ export function SectionEditor({
                         {isTextual ? (
                           <InlineBlockEditor
                             block={block}
-                            onContentChange={(content) => handleContentChange(block.id, content)}
+                            onBlockChange={(data) => handleBlockChange(block.id, data)}
                             onTypeChange={(newType) => handleTypeChange(block.id, newType)}
                             isSelected={isSelected}
                             onSelect={() => setSelectedBlockId(block.id)}

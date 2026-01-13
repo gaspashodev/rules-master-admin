@@ -9,11 +9,10 @@ import { cn } from '@/lib/utils';
 import type { 
   LessonSection, 
   SectionBlock,
-  ListItemsContent,
-  InfoBarContent,
-  FloatingImageContent,
-  HeadingContent,
-  QuoteContent 
+  HeadingMetadata,
+  InfoBarMetadata,
+  ListItemsMetadata,
+  FloatingImageMetadata,
 } from '@/types/database';
 import { Moon, Sun } from 'lucide-react';
 
@@ -71,6 +70,9 @@ const listItemColors: Record<string, string> = {
   green: '#22c55e',
   purple: '#a855f7',
   red: '#ef4444',
+  orange: '#f97316',
+  pink: '#ec4899',
+  cyan: '#06b6d4',
 };
 
 // ============================================
@@ -277,13 +279,27 @@ interface BlockRendererProps {
   colors: typeof mobileColors.dark;
 }
 
-// Helper pour parser le JSON de manière sécurisée
-function safeJsonParse<T>(content: string, defaultValue: T): T {
-  try {
-    return content ? JSON.parse(content) : defaultValue;
-  } catch {
-    return defaultValue;
-  }
+// ============ HELPERS LECTURE METADATA ============
+
+function getBlockInfoBar(block: SectionBlock): InfoBarMetadata {
+  return (block.metadata as InfoBarMetadata) || {};
+}
+
+function getBlockListItems(block: SectionBlock): ListItemsMetadata {
+  return (block.metadata as ListItemsMetadata) || { items: [] };
+}
+
+function getBlockFloatingImage(block: SectionBlock): FloatingImageMetadata {
+  return (block.metadata as FloatingImageMetadata) || { position: 'bottom-right', height: 50 };
+}
+
+function getBlockHeading(block: SectionBlock): { text: string; emoji?: string } {
+  const meta = block.metadata as HeadingMetadata | null;
+  return { text: block.content || '', emoji: meta?.emoji };
+}
+
+function getBlockQuote(block: SectionBlock): string {
+  return block.content || '';
 }
 
 function BlockRenderer({ block, colors }: BlockRendererProps) {
@@ -292,7 +308,7 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
 
   // Rendu spécial pour QUOTE
   if (block.block_type === 'quote') {
-    const quoteContent = safeJsonParse<QuoteContent>(block.content, { text: '' });
+    const quoteText = getBlockQuote(block);
     return (
       <div className="mb-3">
         <div 
@@ -306,7 +322,7 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
             className="text-[13px] italic leading-[20px]"
             style={{ color: colors.text }}
           >
-            "{quoteContent.text}"
+            "{quoteText}"
           </p>
         </div>
       </div>
@@ -315,15 +331,15 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
 
   // Rendu spécial pour HEADING
   if (block.block_type === 'heading') {
-    const headingContent = safeJsonParse<HeadingContent>(block.content, { text: '' });
+    const headingData = getBlockHeading(block);
     return (
       <div className="mb-3 mt-2">
         <p 
           className="text-[16px] font-bold leading-[22px]"
           style={{ color: colors.text }}
         >
-          {headingContent.emoji && <span className="mr-2">{headingContent.emoji}</span>}
-          {headingContent.text}
+          {headingData.emoji && <span className="mr-2">{headingData.emoji}</span>}
+          {headingData.text}
         </p>
       </div>
     );
@@ -331,12 +347,18 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
 
   // Rendu spécial pour INFO_BAR
   if (block.block_type === 'info_bar') {
-    const infoContent = safeJsonParse<InfoBarContent>(block.content, { items: [] });
-    const items = infoContent.items || [];
+    const infoData = getBlockInfoBar(block);
+    const hasData = infoData.duration || infoData.players || infoData.age;
 
-    if (items.length === 0) {
+    if (!hasData) {
       return null;
     }
+
+    // Construire les items à afficher
+    const items: { icon: string; value: string; label: string }[] = [];
+    if (infoData.duration) items.push({ icon: '⏱', value: infoData.duration, label: 'Durée' });
+    if (infoData.players) items.push({ icon: '👥', value: infoData.players, label: 'Joueurs' });
+    if (infoData.age) items.push({ icon: '🎂', value: infoData.age, label: 'Âge' });
 
     return (
       <div className="mb-3">
@@ -373,19 +395,19 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
 
   // Rendu spécial pour LIST_ITEMS
   if (block.block_type === 'list_items') {
-    const listContent = safeJsonParse<ListItemsContent>(block.content, { items: [] });
+    const listData = getBlockListItems(block);
     return (
       <div className="mb-3">
-        {listContent.title && (
+        {listData.title && (
           <p 
             className="text-[14px] font-semibold mb-2"
             style={{ color: colors.text }}
           >
-            {listContent.title}
+            {listData.title}
           </p>
         )}
         <div className="space-y-2">
-          {listContent.items.map((item, index) => (
+          {listData.items.map((item, index) => (
             <div 
               key={index}
               className="flex items-center gap-3 p-2.5 rounded-xl"
@@ -444,9 +466,7 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
 
   // Rendu spécial pour FLOATING_IMAGE
   if (block.block_type === 'floating_image') {
-    const floatContent = safeJsonParse<FloatingImageContent>(block.content, { 
-      position: 'bottom-right', height: 50 
-    });
+    const floatData = getBlockFloatingImage(block);
     
     if (!block.image_url) return null;
 
@@ -455,9 +475,9 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
         <div 
           className={cn(
             "absolute bottom-0",
-            floatContent.position === 'bottom-right' ? 'right-0' : 'left-0'
+            floatData.position === 'bottom-right' ? 'right-0' : 'left-0'
           )}
-          style={{ height: `${floatContent.height}%`, maxHeight: '150px' }}
+          style={{ height: `${floatData.height}%`, maxHeight: '150px' }}
         >
           <img
             src={block.image_url}

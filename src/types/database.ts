@@ -74,57 +74,57 @@ export interface SectionBlock {
   section_id: string;
   block_type: BlockType;
   order_index: number;
-  content: string; // Texte simple ou JSON stringifié pour les types complexes
+  content: string | null; // Texte simple (quote, heading, text, tip, example) ou null
   image_url: string | null;
   video_url: string | null;
   alt_text: string | null;
+  metadata: BlockMetadata | null; // Données structurées pour les nouveaux types de blocs
   created_at: string;
 }
 
-// ============ TYPES DE CONTENU STRUCTURÉ POUR LES BLOCS ============
+// Types de metadata selon le type de bloc
+export type BlockMetadata = 
+  | HeadingMetadata 
+  | InfoBarMetadata 
+  | ListItemsMetadata 
+  | FloatingImageMetadata;
 
-// Pour block_type: 'info_bar'
-export interface InfoBarItem {
-  label: string;      // ex: "Durée", "Joueurs", "Âge"
-  value: string;      // ex: "30 min", "2-4", "10+"
-  icon?: string;      // Emoji optionnel (ex: "⏱", "👥", "🎂")
+// ============ TYPES DE METADATA POUR LES BLOCS ============
+
+// Pour block_type: 'heading' - emoji dans metadata, texte dans content
+export interface HeadingMetadata {
+  emoji?: string;      // Emoji affiché devant le texte
 }
 
-export interface InfoBarContent {
-  items: InfoBarItem[];
+// Pour block_type: 'info_bar' - tout dans metadata, content = null
+export interface InfoBarMetadata {
+  duration?: string;   // ex: "30 min"
+  players?: string;    // ex: "2-4"
+  age?: string;        // ex: "10+"
 }
 
-// Pour block_type: 'list_items'
-export interface ListItem {
-  icon?: string;      // Emoji ou nom d'icône
-  color?: 'yellow' | 'blue' | 'green' | 'purple' | 'red';
-  name: string;
-  description?: string;
-  badge?: string;     // ex: "3=", "4≠", "5"
-}
-
-export interface ListItemsContent {
-  title?: string;     // Titre au-dessus de la liste (avec emoji optionnel)
+// Pour block_type: 'list_items' - tout dans metadata, content = null
+export interface ListItemsMetadata {
+  title?: string;      // Titre au-dessus de la liste (avec emoji optionnel)
   items: ListItem[];
 }
 
-// Pour block_type: 'floating_image'
-// L'URL de l'image est stockée dans image_url (pas dans le JSON)
-export interface FloatingImageContent {
+export interface ListItem {
+  icon?: string;       // Emoji affiché à gauche
+  color?: 'yellow' | 'blue' | 'green' | 'purple' | 'red' | 'orange' | 'pink' | 'cyan';
+  name: string;        // Titre de l'élément (requis)
+  description?: string; // Description courte
+  badge?: string;      // Badge affiché à droite (ex: "3=", "4≠", "5")
+}
+
+// Pour block_type: 'floating_image' - position/height dans metadata, URL dans image_url
+export interface FloatingImageMetadata {
   position: 'bottom-right' | 'bottom-left';
-  height: number;     // Hauteur en % de l'écran
+  height: number;      // Pourcentage de la hauteur d'écran (ex: 50 = moitié)
 }
 
-// Pour block_type: 'heading'
-export interface HeadingContent {
-  text: string;
-  emoji?: string;
-}
-
-// Pour block_type: 'quote'
-export interface QuoteContent {
-  text: string;
-}
+// Pour block_type: 'quote' - tout dans content, pas de metadata
+// Le texte de la citation est stocké directement dans content
 
 // ============ FIN NOUVELLE ARCHITECTURE ============
 
@@ -190,10 +190,11 @@ export interface SectionFormData {
 export interface BlockFormData {
   block_type: BlockType;
   order_index: number;
-  content: string;
+  content: string | null;
   image_url: string | null;
   video_url: string | null;
   alt_text: string | null;
+  metadata: BlockMetadata | null;
 }
 
 // ============ FIN NOUVEAUX FORM DATA ============
