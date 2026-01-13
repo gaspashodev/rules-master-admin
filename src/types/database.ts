@@ -97,10 +97,14 @@ export interface HeadingMetadata {
 }
 
 // Pour block_type: 'info_bar' - tout dans metadata, content = null
+export interface InfoBarItem {
+  icon?: string;       // Emoji (ex: "⏱", "👥", "🎂")
+  label: string;       // Libellé personnalisé (ex: "Durée", "Joueurs")
+  value: string;       // Valeur (ex: "30 min", "2-4")
+}
+
 export interface InfoBarMetadata {
-  duration?: string;   // ex: "30 min"
-  players?: string;    // ex: "2-4"
-  age?: string;        // ex: "10+"
+  items: InfoBarItem[];  // 2 ou 3 items
 }
 
 // Pour block_type: 'list_items' - tout dans metadata, content = null

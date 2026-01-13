@@ -40,6 +40,7 @@ import type {
   BlockMetadata,
   HeadingMetadata,
   InfoBarMetadata,
+  InfoBarItem,
   ListItemsMetadata,
   FloatingImageMetadata,
   ListItem,
@@ -116,7 +117,7 @@ const MAX_CONTENT_LENGTH = 1500;
 // ============ HELPERS LECTURE METADATA ============
 
 function getBlockInfoBar(block: SectionBlock): InfoBarMetadata {
-  return (block.metadata as InfoBarMetadata) || {};
+  return (block.metadata as InfoBarMetadata) || { items: [] };
 }
 
 function getBlockListItems(block: SectionBlock): ListItemsMetadata {
@@ -338,30 +339,16 @@ function ComplexBlockPreview({ block, onClick }: ComplexBlockPreviewProps) {
 
       case 'info_bar': {
         const infoData = getBlockInfoBar(block);
-        const hasData = infoData.duration || infoData.players || infoData.age;
+        const items = infoData.items || [];
         return (
           <div className="flex items-center gap-4 text-sm">
-            {hasData ? (
-              <>
-                {infoData.duration && (
-                  <span className="flex items-center gap-1">
-                    <span className="text-muted-foreground">⏱</span>
-                    <span className="text-muted-foreground">Durée:</span> {infoData.duration}
-                  </span>
-                )}
-                {infoData.players && (
-                  <span className="flex items-center gap-1">
-                    <span className="text-muted-foreground">👥</span>
-                    <span className="text-muted-foreground">Joueurs:</span> {infoData.players}
-                  </span>
-                )}
-                {infoData.age && (
-                  <span className="flex items-center gap-1">
-                    <span className="text-muted-foreground">🎂</span>
-                    <span className="text-muted-foreground">Âge:</span> {infoData.age}
-                  </span>
-                )}
-              </>
+            {items.length > 0 ? (
+              items.map((item, idx) => (
+                <span key={idx} className="flex items-center gap-1">
+                  {item.icon && <span className="text-muted-foreground">{item.icon}</span>}
+                  <span className="text-muted-foreground">{item.label}:</span> {item.value || '—'}
+                </span>
+              ))
             ) : (
               <span className="text-muted-foreground">Aucune info configurée</span>
             )}
@@ -581,58 +568,104 @@ interface InfoBarEditorProps {
 }
 
 function InfoBarEditor({ metadata, onChange }: InfoBarEditorProps) {
+  const items = metadata.items || [];
+  const canAddMore = items.length < 3;
+  const canRemove = items.length > 2;
+
+  const addItem = () => {
+    if (!canAddMore) return;
+    onChange({
+      items: [...items, { icon: '', label: '', value: '' }],
+    });
+  };
+
+  const removeItem = (index: number) => {
+    if (!canRemove) return;
+    onChange({
+      items: items.filter((_, i) => i !== index),
+    });
+  };
+
+  const updateItem = (index: number, updates: Partial<InfoBarItem>) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], ...updates };
+    onChange({ items: newItems });
+  };
+
+  // Initialiser avec 2 items par défaut si vide
+  if (items.length === 0) {
+    onChange({
+      items: [
+        { icon: '⏱', label: 'Durée', value: '' },
+        { icon: '👥', label: 'Joueurs', value: '' },
+      ],
+    });
+    return null;
+  }
+
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Affiche des informations rapides sur le jeu. Tous les champs sont optionnels.
-      </p>
+      <div className="flex items-center justify-between">
+        <Label>Champs ({items.length}/3)</Label>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={addItem}
+          disabled={!canAddMore}
+        >
+          <Plus className="h-3 w-3 mr-1" />
+          Ajouter un champ
+        </Button>
+      </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        <div className="p-4 border rounded-lg bg-muted/30">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">⏱</span>
-            <div className="flex-1 space-y-1">
-              <Label className="text-xs">Durée de la partie</Label>
-              <Input
-                value={metadata.duration || ''}
-                onChange={(e) => onChange({ ...metadata, duration: e.target.value || undefined })}
-                placeholder="30 min"
-              />
+      <div className="space-y-3">
+        {items.map((item, index) => (
+          <div key={index} className="p-3 border rounded-lg bg-muted/30">
+            <div className="flex gap-2 items-end">
+              <div className="space-y-1 w-16">
+                <Label className="text-xs">Icône</Label>
+                <Input
+                  value={item.icon || ''}
+                  onChange={(e) => updateItem(index, { icon: e.target.value })}
+                  placeholder="⏱"
+                  className="text-center"
+                />
+              </div>
+              <div className="flex-1 space-y-1">
+                <Label className="text-xs">Libellé *</Label>
+                <Input
+                  value={item.label}
+                  onChange={(e) => updateItem(index, { label: e.target.value })}
+                  placeholder="Durée"
+                />
+              </div>
+              <div className="flex-1 space-y-1">
+                <Label className="text-xs">Valeur *</Label>
+                <Input
+                  value={item.value}
+                  onChange={(e) => updateItem(index, { value: e.target.value })}
+                  placeholder="30 min"
+                />
+              </div>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="text-destructive h-9 w-9"
+                onClick={() => removeItem(index)}
+                disabled={!canRemove}
+                title={canRemove ? 'Supprimer' : 'Minimum 2 champs'}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-        </div>
-
-        <div className="p-4 border rounded-lg bg-muted/30">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">👥</span>
-            <div className="flex-1 space-y-1">
-              <Label className="text-xs">Nombre de joueurs</Label>
-              <Input
-                value={metadata.players || ''}
-                onChange={(e) => onChange({ ...metadata, players: e.target.value || undefined })}
-                placeholder="2-4"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 border rounded-lg bg-muted/30">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">🎂</span>
-            <div className="flex-1 space-y-1">
-              <Label className="text-xs">Âge minimum</Label>
-              <Input
-                value={metadata.age || ''}
-                onChange={(e) => onChange({ ...metadata, age: e.target.value || undefined })}
-                placeholder="10+"
-              />
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Les champs remplis s'afficheront sous forme de petites cartes horizontales sur mobile.
+        Affiche 2 ou 3 infos sous forme de petites cartes horizontales
       </p>
     </div>
   );
@@ -800,7 +833,7 @@ function ComplexBlockModal({
 
   // États pour les métadonnées structurées (nouveau format)
   const [listMetadata, setListMetadata] = useState<ListItemsMetadata>({ items: [] });
-  const [infoBarMetadata, setInfoBarMetadata] = useState<InfoBarMetadata>({});
+  const [infoBarMetadata, setInfoBarMetadata] = useState<InfoBarMetadata>({ items: [] });
   const [floatingMetadata, setFloatingMetadata] = useState<FloatingImageMetadata>({
     position: 'bottom-right',
     height: 50,
@@ -842,8 +875,7 @@ function ComplexBlockModal({
       case 'info_bar':
         content = null; // Plus de content pour info_bar
         // Ne sauvegarder que si au moins un champ est rempli
-        const hasInfoData = infoBarMetadata.duration || infoBarMetadata.players || infoBarMetadata.age;
-        metadata = hasInfoData ? infoBarMetadata : null;
+        const hasInfoData = infoBarMetadata.items?.some(item => item.value);        metadata = hasInfoData ? infoBarMetadata : null;
         break;
       case 'floating_image':
         content = null; // Plus de content pour floating_image

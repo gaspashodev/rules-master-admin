@@ -282,7 +282,7 @@ interface BlockRendererProps {
 // ============ HELPERS LECTURE METADATA ============
 
 function getBlockInfoBar(block: SectionBlock): InfoBarMetadata {
-  return (block.metadata as InfoBarMetadata) || {};
+  return (block.metadata as InfoBarMetadata) || { items: [] };
 }
 
 function getBlockListItems(block: SectionBlock): ListItemsMetadata {
@@ -348,17 +348,11 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
   // Rendu spécial pour INFO_BAR
   if (block.block_type === 'info_bar') {
     const infoData = getBlockInfoBar(block);
-    const hasData = infoData.duration || infoData.players || infoData.age;
+    const items = infoData.items || [];
 
-    if (!hasData) {
+    if (items.length === 0) {
       return null;
     }
-
-    // Construire les items à afficher
-    const items: { icon: string; value: string; label: string }[] = [];
-    if (infoData.duration) items.push({ icon: '⏱', value: infoData.duration, label: 'Durée' });
-    if (infoData.players) items.push({ icon: '👥', value: infoData.players, label: 'Joueurs' });
-    if (infoData.age) items.push({ icon: '🎂', value: infoData.age, label: 'Âge' });
 
     return (
       <div className="mb-3">
