@@ -152,7 +152,7 @@ interface IconPickerProps {
 function IconPicker({ value, onChange, placeholder = "🎯", gameSlug }: IconPickerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const { uploadFile } = useStorage();
+  const { upload } = useStorage();
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -172,14 +172,10 @@ function IconPicker({ value, onChange, placeholder = "🎯", gameSlug }: IconPic
 
     setIsUploading(true);
     try {
-      const fileName = gameSlug 
-        ? `${gameSlug}/icons/${Date.now()}-${file.name}`
-        : `icons/${Date.now()}-${file.name}`;
-      
-      const url = await uploadFile(file, 'lesson-images', fileName);
-      if (url) {
-        onChange(url);
-        toast.success('Image uploadée');
+      const folder = gameSlug ? `${gameSlug}/icons` : 'icons';
+      const result = await upload(file, 'lesson-images', folder);
+      if (result?.url) {
+        onChange(result.url);
       }
     } catch (error) {
       toast.error('Erreur lors de l\'upload');
