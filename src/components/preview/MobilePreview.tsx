@@ -84,8 +84,6 @@ interface MobilePreviewProps {
   onOpenChange: (open: boolean) => void;
   conceptName: string;
   section: LessonSection & { blocks: SectionBlock[] };
-  introduction?: string;
-  summary?: string;
 }
 
 type ThemeMode = 'light' | 'dark';
@@ -592,14 +590,14 @@ function CardPreview({ conceptName, title, blocks, colors, theme }: CardPreviewP
 
       {/* Floating images en position absolue */}
       {floatingBlocks.map((block, index) => (
-        <FloatingImageOverlay key={block.id || `float-${index}`} block={block} colors={colors} />
+        <FloatingImageOverlay key={block.id || `float-${index}`} block={block} />
       ))}
     </div>
   );
 }
 
 // Composant pour les images flottantes en overlay
-function FloatingImageOverlay({ block }: { block: SectionBlock; colors: typeof mobileColors.dark }) {
+function FloatingImageOverlay({ block }: { block: SectionBlock }) {
   if (!block.image_url) return null;
 
   const meta = block.metadata as FloatingImageMetadata | null;
@@ -816,16 +814,14 @@ export function MobilePreview({
   onOpenChange,
   conceptName,
   section,
-  introduction,
-  summary,
 }: MobilePreviewProps) {
   const [theme, setTheme] = useState<ThemeMode>('dark');
   const colors = mobileColors[theme];
 
-  // Simuler plusieurs cartes (intro + section actuelle + summary)
-  const totalCards = (introduction ? 1 : 0) + 1 + (summary ? 1 : 0);
-  const currentCard = introduction ? 2 : 1; // La section est toujours au milieu
-  const progress = (currentCard / totalCards) * 100;
+  // Simuler la progression (section unique)
+  const totalCards = 1;
+  const currentCard = 1;
+  const progress = 100;
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');

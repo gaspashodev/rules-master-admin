@@ -49,7 +49,7 @@ async function searchAll(query: string): Promise<SearchResult[]> {
         id: concept.id,
         type: 'concept' as const,
         title: concept.name,
-        subtitle: concept.description?.substring(0, 60) || 'Concept',
+        subtitle: 'Concept',
         url: `/concepts/${concept.id}`,
         gameId: concept.game_id,
       }))

@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -168,10 +167,7 @@ export function ConceptFormPage() {
   const reorderBlocks = useReorderBlocks();
 
   // États du concept
-  const [introduction, setIntroduction] = useState('');
-  const [summary, setSummary] = useState('');
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [orderIndex, setOrderIndex] = useState(1);
   const [estimatedTime, setEstimatedTime] = useState(5);
 
@@ -196,10 +192,7 @@ export function ConceptFormPage() {
 
   useEffect(() => {
     if (concept) {
-      setIntroduction(concept.introduction || '');
-      setSummary(concept.summary || '');
       setName(concept.name || '');
-      setDescription(concept.description || '');
       setOrderIndex(concept.order_index || 1);
       setEstimatedTime(concept.estimated_time || 5);
     }
@@ -207,21 +200,12 @@ export function ConceptFormPage() {
 
   // ============ HANDLERS CONCEPT ============
 
-  const handleSave = async () => {
-    if (!id) return;
-    await updateConcept.mutateAsync({
-      id,
-      data: { introduction, summary },
-    });
-  };
-
   const handleSaveSettings = async () => {
     if (!id) return;
     await updateConcept.mutateAsync({
       id,
       data: {
         name,
-        description,
         order_index: orderIndex,
         estimated_time: estimatedTime,
       },
@@ -344,12 +328,7 @@ export function ConceptFormPage() {
     let totalMinutes = 0;
     const WORDS_PER_MINUTE = 200;
 
-    // Introduction
-    if (introduction) {
-      totalMinutes += introduction.split(/\s+/).length / WORDS_PER_MINUTE;
-    }
-
-    // Blocs
+    // Blocs de toutes les sections
     concept?.sections?.forEach((section) => {
       section.blocks?.forEach((block) => {
         const words = block.content?.split(/\s+/).length || 0;
@@ -358,11 +337,6 @@ export function ConceptFormPage() {
         if (block.block_type === 'video') totalMinutes += 0.5;
       });
     });
-
-    // Résumé
-    if (summary) {
-      totalMinutes += summary.split(/\s+/).length / WORDS_PER_MINUTE;
-    }
 
     return Math.max(1, Math.ceil(totalMinutes));
   };
@@ -392,13 +366,8 @@ export function ConceptFormPage() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{concept.name}</h1>
-            <p className="text-muted-foreground">{concept.description}</p>
           </div>
         </div>
-        <Button onClick={handleSave} disabled={updateConcept.isPending}>
-          <Save className="h-4 w-4 mr-2" />
-          Enregistrer
-        </Button>
       </div>
 
       <Tabs defaultValue="content" className="space-y-6">
@@ -410,21 +379,6 @@ export function ConceptFormPage() {
 
         {/* ============ ONGLET CONTENU ============ */}
         <TabsContent value="content" className="space-y-6">
-          {/* Introduction */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Introduction</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={introduction}
-                onChange={(e) => setIntroduction(e.target.value)}
-                rows={4}
-                placeholder="Texte d'introduction..."
-              />
-            </CardContent>
-          </Card>
-
           {/* Sections */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -490,21 +444,6 @@ export function ConceptFormPage() {
               )}
             </CardContent>
           </Card>
-
-          {/* Résumé */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Résumé</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
-                rows={4}
-                placeholder="Résumé de fin de leçon..."
-              />
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* ============ ONGLET QUIZ ============ */}
@@ -537,15 +476,6 @@ export function ConceptFormPage() {
                     min={1}
                   />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Description du concept"
-                  rows={2}
-                />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -627,8 +557,6 @@ export function ConceptFormPage() {
           onOpenChange={setIsPreviewOpen}
           conceptName={name || concept?.name || 'Concept'}
           section={previewSection}
-          introduction={introduction}
-          summary={summary}
         />
       )}
     </div>

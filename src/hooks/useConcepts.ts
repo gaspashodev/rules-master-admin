@@ -76,11 +76,9 @@ export function useCreateConcept() {
 
   return useMutation({
     mutationFn: async ({ gameId, data }: { gameId: string; data: ConceptFormData }): Promise<Concept> => {
-      const id = `${gameId}-concept-${data.order_index}`;
-      
       const { data: concept, error } = await supabase
         .from('concepts')
-        .insert([{ id, game_id: gameId, ...data }])
+        .insert([{ game_id: gameId, ...data }])
         .select()
         .single();
 

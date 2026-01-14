@@ -20,7 +20,6 @@ import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -42,8 +41,8 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useConcepts, useCreateConcept, useDeleteConcept, useReorderConcepts } from '@/hooks/useConcepts';
-import { Plus, GripVertical, Clock, ChevronRight, Trash2, BookOpen } from 'lucide-react';
-import type { ConceptFormData, Concept } from '@/types/database';
+import { Plus, GripVertical, ChevronRight, Trash2, BookOpen } from 'lucide-react';
+import type { Concept } from '@/types/database';
 
 interface ConceptsListProps {
   gameId: string;
@@ -90,14 +89,6 @@ function SortableConceptItem({ concept, onDelete, onNavigate }: {
 
       <div className="flex-1 min-w-0">
         <p className="font-medium truncate">{concept.name}</p>
-        <p className="text-sm text-muted-foreground truncate">{concept.description}</p>
-      </div>
-
-      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Clock className="h-4 w-4" />
-          {concept.estimated_time} min
-        </span>
       </div>
 
       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -147,14 +138,7 @@ export function ConceptsList({ gameId }: ConceptsListProps) {
   const reorderConcepts = useReorderConcepts();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [formData, setFormData] = useState<ConceptFormData>({
-    name: '',
-    description: '',
-    order_index: 1,
-    estimated_time: 5,
-    introduction: '',
-    summary: '',
-  });
+  const [conceptName, setConceptName] = useState('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -188,19 +172,13 @@ export function ConceptsList({ gameId }: ConceptsListProps) {
     await createConcept.mutateAsync({
       gameId,
       data: {
-        ...formData,
+        name: conceptName,
         order_index: (concepts?.length || 0) + 1,
+        estimated_time: 1, // Valeur par défaut, calculable ensuite dans les paramètres
       },
     });
     setIsDialogOpen(false);
-    setFormData({
-      name: '',
-      description: '',
-      order_index: 1,
-      estimated_time: 5,
-      introduction: '',
-      summary: '',
-    });
+    setConceptName('');
   };
 
   const handleDelete = (conceptId: string) => {
@@ -222,59 +200,28 @@ export function ConceptsList({ gameId }: ConceptsListProps) {
               Ajouter
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Nouveau concept</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Nom *</Label>
-                  <Input
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Les Bases"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Durée estimée (min)</Label>
-                  <Input
-                    type="number"
-                    value={formData.estimated_time}
-                    onChange={(e) => setFormData({ ...formData, estimated_time: parseInt(e.target.value) })}
-                  />
-                </div>
-              </div>
               <div className="space-y-2">
-                <Label>Description</Label>
+                <Label>Nom *</Label>
                 <Input
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Objectif et déroulement"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Introduction</Label>
-                <Textarea
-                  value={formData.introduction}
-                  onChange={(e) => setFormData({ ...formData, introduction: e.target.value })}
-                  rows={3}
-                  placeholder="Texte d'introduction de la leçon..."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Résumé</Label>
-                <Textarea
-                  value={formData.summary}
-                  onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
-                  rows={3}
-                  placeholder="Résumé de fin de leçon..."
+                  value={conceptName}
+                  onChange={(e) => setConceptName(e.target.value)}
+                  placeholder="Ex: Les Bases, La Mise en place..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && conceptName) {
+                      handleCreate();
+                    }
+                  }}
                 />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Annuler</Button>
-              <Button onClick={handleCreate} disabled={!formData.name || createConcept.isPending}>
+              <Button onClick={handleCreate} disabled={!conceptName || createConcept.isPending}>
                 Créer
               </Button>
             </DialogFooter>

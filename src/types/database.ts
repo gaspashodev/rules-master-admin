@@ -32,11 +32,8 @@ export interface Concept {
   id: string;
   game_id: string;
   name: string;
-  description: string;
   order_index: number;
   estimated_time: number;
-  introduction: string;
-  summary: string;
   created_at: string;
   updated_at: string;
 }
@@ -179,11 +176,8 @@ export interface GameFormData {
 
 export interface ConceptFormData {
   name: string;
-  description: string;
   order_index: number;
-  estimated_time: number;
-  introduction: string;
-  summary: string;
+  estimated_time?: number;
 }
 
 // ============ NOUVEAUX FORM DATA POUR SECTIONS/BLOCS ============
