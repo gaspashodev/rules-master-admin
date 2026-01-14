@@ -297,8 +297,6 @@ export function useCreateBlock() {
 }
 
 export function useUpdateBlock() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (params: { id: string; conceptId: string; data: Partial<BlockFormData> }): Promise<SectionBlock> => {
       const { data: block, error } = await supabase
@@ -311,9 +309,9 @@ export function useUpdateBlock() {
       if (error) throw error;
       return block;
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['concepts', 'detail', variables.conceptId] });
-      toast.success('Bloc mis à jour');
+    onSuccess: () => {
+      // Ne pas invalider les queries pour éviter de perdre le focus/curseur
+      // Les données seront resynchronisées au prochain chargement
     },
     onError: (error: Error) => {
       toast.error(`Erreur: ${error.message}`);

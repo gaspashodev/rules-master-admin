@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -134,15 +134,6 @@ function getBlockFloatingImage(block: SectionBlock): FloatingImageMetadata {
   };
 }
 
-function getBlockHeading(block: SectionBlock): { text: string; emoji?: string } {
-  const meta = block.metadata as HeadingMetadata | null;
-  return { text: block.content || '', emoji: meta?.emoji };
-}
-
-function getBlockQuote(block: SectionBlock): string {
-  return block.content || '';
-}
-
 // ============ INLINE EDITOR COMPONENT ============
 
 interface InlineBlockEditorProps {
@@ -161,39 +152,60 @@ function InlineBlockEditor({
   onSelect,
 }: InlineBlockEditorProps) {
   const config = getBlockConfig(block.block_type);
-
-  // Pour heading: texte dans content, emoji dans metadata
-  const headingData = getBlockHeading(block);
-  const [headingText, setHeadingText] = useState(headingData.text);
-  const [headingEmoji, setHeadingEmoji] = useState(headingData.emoji || '');
   
-  // Pour quote: texte directement dans content
-  const [quoteText, setQuoteText] = useState(getBlockQuote(block));
-
-  // Synchroniser quand le bloc change
+  // États locaux pour éviter les re-renders et garder la position du curseur
+  const [localContent, setLocalContent] = useState(block.content || '');
+  const [headingEmoji, setHeadingEmoji] = useState(
+    block.block_type === 'heading' ? (block.metadata as HeadingMetadata)?.emoji || '' : ''
+  );
+  
+  // Ref pour le debounce
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blockIdRef = useRef(block.id);
+  
+  // Synchroniser seulement quand le bloc.id change (nouveau bloc sélectionné)
   useEffect(() => {
-    if (block.block_type === 'heading') {
-      const data = getBlockHeading(block);
-      setHeadingText(data.text);
-      setHeadingEmoji(data.emoji || '');
-    } else if (block.block_type === 'quote') {
-      setQuoteText(getBlockQuote(block));
+    if (blockIdRef.current !== block.id) {
+      blockIdRef.current = block.id;
+      setLocalContent(block.content || '');
+      if (block.block_type === 'heading') {
+        setHeadingEmoji((block.metadata as HeadingMetadata)?.emoji || '');
+      }
     }
-  }, [block.block_type, block.content, block.metadata]);
+  }, [block.id, block.content, block.block_type, block.metadata]);
 
-  const handleHeadingChange = (text: string, emoji: string) => {
-    setHeadingText(text);
-    setHeadingEmoji(emoji);
-    const metadata: HeadingMetadata | null = emoji ? { emoji } : null;
-    onBlockChange({ 
-      content: text || null,
-      metadata 
-    });
+  // Cleanup du debounce au démontage
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, []);
+
+  const debouncedSave = useCallback((content: string, emoji?: string) => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    
+    debounceRef.current = setTimeout(() => {
+      if (block.block_type === 'heading') {
+        const metadata: HeadingMetadata | null = emoji ? { emoji } : null;
+        onBlockChange({ content: content || null, metadata });
+      } else {
+        onBlockChange({ content: content || null, metadata: null });
+      }
+    }, 500); // 500ms de délai
+  }, [block.block_type, onBlockChange]);
+
+  const handleContentChange = (value: string) => {
+    setLocalContent(value);
+    debouncedSave(value, headingEmoji);
   };
 
-  const handleQuoteChange = (text: string) => {
-    setQuoteText(text);
-    onBlockChange({ content: text || null, metadata: null });
+  const handleEmojiChange = (emoji: string) => {
+    setHeadingEmoji(emoji);
+    debouncedSave(localContent, emoji);
   };
 
   const isTextualType = TEXTUAL_BLOCK_TYPES.includes(block.block_type);
@@ -253,13 +265,13 @@ function InlineBlockEditor({
             <div className="flex gap-2">
               <Input
                 value={headingEmoji}
-                onChange={(e) => handleHeadingChange(headingText, e.target.value)}
+                onChange={(e) => handleEmojiChange(e.target.value)}
                 placeholder="🎯"
                 className="w-14 text-center text-lg"
               />
               <Input
-                value={headingText}
-                onChange={(e) => handleHeadingChange(e.target.value, headingEmoji)}
+                value={localContent}
+                onChange={(e) => handleContentChange(e.target.value)}
                 placeholder="Titre de la section..."
                 className="flex-1 font-semibold"
               />
@@ -267,16 +279,16 @@ function InlineBlockEditor({
           </div>
         ) : block.block_type === 'quote' ? (
           <Textarea
-            value={quoteText}
-            onChange={(e) => handleQuoteChange(e.target.value)}
+            value={localContent}
+            onChange={(e) => handleContentChange(e.target.value)}
             placeholder="Texte de la citation..."
             rows={3}
             className="resize-none border-0 bg-transparent focus-visible:ring-0 italic"
           />
         ) : (
           <RichTextEditor
-            value={block.content || ''}
-            onChange={(value) => onBlockChange({ content: value || null, metadata: null })}
+            value={localContent}
+            onChange={handleContentChange}
             placeholder={
               block.block_type === 'tip'
                 ? '💡 Astuce ou conseil utile...'
