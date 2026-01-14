@@ -32,6 +32,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { IconRenderer, suggestedIcons, icons } from '@/components/ui/icon-renderer';
 import type { 
   LessonSection, 
   SectionBlock, 
@@ -60,7 +61,12 @@ import {
   ImageIcon,
   Heading,
   Smartphone,
+  Loader2,
+  Upload,
+  X,
 } from 'lucide-react';
+import { useStorage } from '@/hooks/useStorage';
+import { toast } from 'sonner';
 import {
   DndContext,
   closestCenter,
@@ -132,6 +138,164 @@ function getBlockFloatingImage(block: SectionBlock): FloatingImageMetadata {
     bleed: meta?.bleed || 0,
     fade: meta?.fade || 0,
   };
+}
+
+// ============ ICON PICKER COMPONENT ============
+
+interface IconPickerProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  gameSlug?: string;
+}
+
+function IconPicker({ value, onChange, placeholder = "🎯", gameSlug }: IconPickerProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const { uploadFile } = useStorage();
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Vérifier le type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Fichier non supporté. Utilisez une image.');
+      return;
+    }
+
+    // Vérifier la taille (max 100Ko pour une icône)
+    if (file.size > 100 * 1024) {
+      toast.error('Image trop lourde (max 100 Ko)');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const fileName = gameSlug 
+        ? `${gameSlug}/icons/${Date.now()}-${file.name}`
+        : `icons/${Date.now()}-${file.name}`;
+      
+      const url = await uploadFile(file, 'lesson-images', fileName);
+      if (url) {
+        onChange(url);
+        toast.success('Image uploadée');
+      }
+    } catch (error) {
+      toast.error('Erreur lors de l\'upload');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const isImageValue = value && (value.startsWith('http') || value.startsWith('data:image'));
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button 
+          variant="outline" 
+          className="w-full h-9 px-2 justify-center"
+          disabled={isUploading}
+        >
+          {isUploading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : value ? (
+            <IconRenderer icon={value} size={16} />
+          ) : (
+            <span className="text-muted-foreground">{placeholder}</span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-72 max-h-96 overflow-y-auto">
+        <div className="p-2">
+          <Input
+            value={isImageValue ? '' : value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Emoji ou nom d'icône..."
+            className="h-8 text-sm"
+          />
+        </div>
+        
+        {/* Upload image */}
+        <div className="p-2 border-t">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full h-8 text-xs"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+          >
+            <Upload className="h-3 w-3 mr-1" />
+            Image personnalisée
+          </Button>
+          {isImageValue && (
+            <div className="mt-2 flex items-center gap-2 p-2 bg-muted/50 rounded">
+              <img src={value} alt="" className="w-6 h-6 object-contain" />
+              <span className="text-xs text-muted-foreground flex-1 truncate">Image</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => onChange('')}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <DropdownMenuSeparator />
+        <div className="p-2 text-xs text-muted-foreground">
+          Icônes Lucide :
+        </div>
+        <div className="grid grid-cols-6 gap-1 p-2">
+          {suggestedIcons.map((icon) => {
+            const LucideIcon = icons[icon.name as keyof typeof icons];
+            return (
+              <button
+                key={icon.name}
+                type="button"
+                className="p-2 rounded hover:bg-muted flex items-center justify-center"
+                onClick={() => onChange(icon.name)}
+                title={icon.label}
+              >
+                {LucideIcon && <LucideIcon size={16} />}
+              </button>
+            );
+          })}
+        </div>
+        <DropdownMenuSeparator />
+        <div className="p-2 text-xs text-muted-foreground">
+          Emojis courants :
+        </div>
+        <div className="grid grid-cols-8 gap-1 p-2">
+          {['⏱', '👥', '🎂', '🎯', '⭐', '🏆', '🎲', '🃏', '💰', '❤️', '⚡', '🔥', '🛡️', '⚔️', '📌', '✓'].map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              className="p-1.5 rounded hover:bg-muted text-lg"
+              onClick={() => onChange(emoji)}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 // ============ INLINE EDITOR COMPONENT ============
@@ -501,9 +665,10 @@ function InsertBlockButton({ onInsert, disabled }: InsertBlockButtonProps) {
 interface InfoBarEditorProps {
   metadata: InfoBarMetadata;
   onChange: (m: InfoBarMetadata) => void;
+  gameSlug?: string;
 }
 
-function InfoBarEditor({ metadata, onChange }: InfoBarEditorProps) {
+function InfoBarEditor({ metadata, onChange, gameSlug }: InfoBarEditorProps) {
   const items = metadata.items || [];
   const canAddMore = items.length < 3;
   const canRemove = items.length > 2;
@@ -561,11 +726,11 @@ function InfoBarEditor({ metadata, onChange }: InfoBarEditorProps) {
             <div className="flex gap-2 items-end">
               <div className="space-y-1 w-16">
                 <Label className="text-xs">Icône</Label>
-                <Input
+                <IconPicker
                   value={item.icon || ''}
-                  onChange={(e) => updateItem(index, { icon: e.target.value })}
+                  onChange={(icon) => updateItem(index, { icon })}
                   placeholder="⏱"
-                  className="text-center"
+                  gameSlug={gameSlug}
                 />
               </div>
               <div className="flex-1 space-y-1">
@@ -612,9 +777,10 @@ function InfoBarEditor({ metadata, onChange }: InfoBarEditorProps) {
 interface ListItemsEditorProps {
   metadata: ListItemsMetadata;
   onChange: (m: ListItemsMetadata) => void;
+  gameSlug?: string;
 }
 
-function ListItemsEditor({ metadata, onChange }: ListItemsEditorProps) {
+function ListItemsEditor({ metadata, onChange, gameSlug }: ListItemsEditorProps) {
   const colors: Array<ListItem['color']> = ['yellow', 'blue', 'green', 'purple', 'red', 'orange', 'pink', 'cyan'];
 
   const addItem = () => {
@@ -661,12 +827,12 @@ function ListItemsEditor({ metadata, onChange }: ListItemsEditorProps) {
           <div key={index} className="p-3 border rounded-lg space-y-2 bg-muted/30">
             <div className="flex gap-2">
               <div className="space-y-1 w-16">
-                <Label className="text-xs">Emoji</Label>
-                <Input
+                <Label className="text-xs">Icône</Label>
+                <IconPicker
                   value={item.icon || ''}
-                  onChange={(e) => updateItem(index, { icon: e.target.value })}
+                  onChange={(icon) => updateItem(index, { icon })}
                   placeholder="⚡"
-                  className="text-center"
+                  gameSlug={gameSlug}
                 />
               </div>
               <div className="space-y-1 w-24">
@@ -910,12 +1076,12 @@ function ComplexBlockModal({
 
           {/* INFO_BAR */}
           {form.block_type === 'info_bar' && (
-            <InfoBarEditor metadata={infoBarMetadata} onChange={setInfoBarMetadata} />
+            <InfoBarEditor metadata={infoBarMetadata} onChange={setInfoBarMetadata} gameSlug={gameSlug} />
           )}
 
           {/* LIST_ITEMS */}
           {form.block_type === 'list_items' && (
-            <ListItemsEditor metadata={listMetadata} onChange={setListMetadata} />
+            <ListItemsEditor metadata={listMetadata} onChange={setListMetadata} gameSlug={gameSlug} />
           )}
 
           {/* FLOATING_IMAGE */}

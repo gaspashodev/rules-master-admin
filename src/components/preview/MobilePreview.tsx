@@ -15,6 +15,7 @@ import type {
   FloatingImageMetadata,
 } from '@/types/database';
 import { Moon, Sun } from 'lucide-react';
+import { IconRenderer } from '@/components/ui/icon-renderer';
 
 // ============================================
 // COULEURS DU THÈME MOBILE (depuis Colors.ts)
@@ -361,7 +362,7 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
                 border: '1px solid',
               }}
             >
-              {item.icon && <span className="text-[16px] block">{item.icon}</span>}
+              {item.icon && <IconRenderer icon={item.icon} size={16} className="block mx-auto" />}
               <span 
                 className="text-[12px] font-bold block"
                 style={{ color: colors.text }}
@@ -412,7 +413,11 @@ function BlockRenderer({ block, colors }: BlockRendererProps) {
                   backgroundColor: listItemColors[item.color || 'blue'] + '20',
                 }}
               >
-                <span className="text-[14px]">{item.icon || '📌'}</span>
+                <IconRenderer 
+                  icon={item.icon || '📌'} 
+                  size={14} 
+                  style={{ color: listItemColors[item.color || 'blue'] }}
+                />
               </div>
               
               {/* Contenu */}
