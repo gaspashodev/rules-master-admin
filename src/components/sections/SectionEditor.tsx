@@ -117,7 +117,7 @@ const getBlockConfig = (type: BlockType): BlockTypeConfig => {
   return blockTypeConfigs.find((c) => c.value === type) || blockTypeConfigs[0];
 };
 
-const MAX_BLOCKS_PER_SECTION = 6;
+const MAX_BLOCKS_PER_SECTION = 8;
 const MAX_CONTENT_LENGTH = 1500;
 
 // ============ HELPERS LECTURE METADATA ============
