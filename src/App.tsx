@@ -7,6 +7,8 @@ import { DashboardPage } from './pages/DashboardPage';
 import { GamesListPage } from './pages/GamesListPage';
 import { GameFormPage } from './pages/GameFormPage';
 import { ConceptFormPage } from './pages/ConceptFormPage';
+import AnalyticsPage from './pages/AnalyticsPage';
+import ErrorReportsPage from './pages/ErrorReportsPage';
 
 function App() {
   return (
@@ -30,6 +32,8 @@ function App() {
           <Route path="/concepts/:id" element={<ConceptFormPage />} />
           <Route path="/concepts" element={<PlaceholderPage title="Concepts" />} />
           <Route path="/quizzes" element={<PlaceholderPage title="Quiz" />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/reports" element={<ErrorReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>

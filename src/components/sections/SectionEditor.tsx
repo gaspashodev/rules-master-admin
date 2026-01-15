@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -137,6 +138,7 @@ function getBlockFloatingImage(block: SectionBlock): FloatingImageMetadata {
     height: meta?.height || 50,
     bleed: meta?.bleed || 0,
     fade: meta?.fade || 0,
+    mirror: meta?.mirror || false,
   };
 }
 
@@ -937,6 +939,7 @@ function ComplexBlockModal({
     height: 50,
     bleed: 0,
     fade: 0,
+    mirror: false,
   });
 
   // Initialiser le formulaire quand le bloc change
@@ -1155,6 +1158,20 @@ function ComplexBlockModal({
                     0 = opaque, 100 = invisible
                   </p>
                 </div>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label>Effet miroir</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Retourne l'image horizontalement
+                  </p>
+                </div>
+                <Switch
+                  checked={floatingMetadata.mirror || false}
+                  onCheckedChange={(checked) =>
+                    setFloatingMetadata({ ...floatingMetadata, mirror: checked })
+                  }
+                />
               </div>
               <p className="text-xs text-muted-foreground">
                 Image en position absolue qui flotte par-dessus le contenu avec animation

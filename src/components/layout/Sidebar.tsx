@@ -4,6 +4,8 @@ import {
   LayoutDashboard,
   Gamepad2,
   Settings,
+  BarChart3,
+  MessageSquareWarning,
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
@@ -13,6 +15,8 @@ const navigation = [
 ];
 
 const secondaryNavigation = [
+  { name: 'Statistiques', href: '/analytics', icon: BarChart3 },
+  { name: 'Signalements', href: '/reports', icon: MessageSquareWarning },
   { name: 'Paramètres', href: '/settings', icon: Settings },
 ];
 

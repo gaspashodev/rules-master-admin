@@ -124,6 +124,7 @@ export interface FloatingImageMetadata {
   height: number;      // Pourcentage de la hauteur d'écran (ex: 50 = moitié)
   bleed?: number;      // Fond perdu en % (0 = désactivé, 10 = dépasse de 10%)
   fade?: number;       // Fondu/opacité en % (0 = opaque, 50 = semi-transparent)
+  mirror?: boolean;    // Effet miroir horizontal
 }
 
 // Pour block_type: 'quote' - tout dans content, pas de metadata
@@ -266,4 +267,44 @@ export interface GameBarcode {
 export interface GameBarcodeFormData {
   barcode: string;
   edition: string | null;
+}
+
+// ============ ANALYTICS ============
+
+export interface ScanAnalytics {
+  barcode: string;
+  game_id: string | null;
+  game_name: string | null;
+  scan_count: number;
+  unique_users: number;
+  first_scanned: string;
+  last_scanned: string;
+  game_exists: boolean;
+}
+
+export interface MissingGameDemand {
+  barcode: string;
+  request_count: number;
+  unique_users: number;
+  first_requested: string;
+  last_requested: string;
+}
+
+// ============ ERROR REPORTS ============
+
+export type ReportType = 'content' | 'ui' | 'functionality';
+export type ReportStatus = 'pending' | 'reviewed' | 'fixed' | 'dismissed';
+
+export interface ErrorReport {
+  id: string;
+  game_id: string;
+  game_name: string;
+  concept_id: string | null;
+  concept_name: string | null;
+  section_index: number | null;
+  report_type: ReportType;
+  description: string;
+  screenshot_url: string | null;
+  status: ReportStatus;
+  created_at: string;
 }

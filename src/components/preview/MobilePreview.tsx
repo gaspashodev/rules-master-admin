@@ -610,6 +610,7 @@ function FloatingImageOverlay({ block }: { block: SectionBlock }) {
   const height = meta?.height || 50;
   const bleed = meta?.bleed || 0;
   const fade = meta?.fade || 0;
+  const mirror = meta?.mirror || false;
 
   const isTop = position.includes('top');
   const isRight = position.includes('right');
@@ -637,6 +638,7 @@ function FloatingImageOverlay({ block }: { block: SectionBlock }) {
           height: `${heightPx}px`,
           opacity,
           filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.4))',
+          transform: mirror ? 'scaleX(-1)' : undefined,
         }}
       />
     </div>
