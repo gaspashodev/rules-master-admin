@@ -46,7 +46,7 @@ export function useMissingGamesDemand() {
 
 export function useErrorReports(status?: ReportStatus) {
   return useQuery({
-    queryKey: ['error-reports', status],
+    queryKey: ['error-reports', 'list', status],
     queryFn: async (): Promise<ErrorReport[]> => {
       let query = supabase
         .from('error_reports')
@@ -65,17 +65,35 @@ export function useErrorReports(status?: ReportStatus) {
   });
 }
 
+// Stats séparées pour avoir les totaux même quand la liste est filtrée
+export function useErrorReportsStats() {
+  return useQuery({
+    queryKey: ['error-reports', 'stats'],
+    queryFn: async (): Promise<{ status: ReportStatus; report_type: string }[]> => {
+      const { data, error } = await supabase
+        .from('error_reports')
+        .select('status, report_type');
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+}
+
 export function useUpdateReportStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: ReportStatus }): Promise<void> => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('error_reports')
         .update({ status })
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
 
       if (error) throw error;
+      if (!data) throw new Error('Mise à jour échouée - vérifiez les permissions');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['error-reports'] });

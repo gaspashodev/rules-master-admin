@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   useErrorReports,
+  useErrorReportsStats,
   useUpdateReportStatus,
   useDeleteErrorReport,
 } from '@/hooks/useAnalytics';
@@ -64,16 +65,26 @@ export default function ErrorReportsPage() {
   const [statusFilter, setStatusFilter] = useState<ReportStatus | 'all'>('all');
   const [selectedReport, setSelectedReport] = useState<ErrorReport | null>(null);
   
+  // Liste filtrée pour l'affichage
   const { data: reports, isLoading } = useErrorReports(
     statusFilter === 'all' ? undefined : statusFilter
   );
+  // Stats sur tous les reports (non filtrés)
+  const { data: allReports } = useErrorReportsStats();
+  
   const updateStatus = useUpdateReportStatus();
   const deleteReport = useDeleteErrorReport();
 
-  const pendingCount = reports?.filter(r => r.status === 'pending').length || 0;
-  const reviewedCount = reports?.filter(r => r.status === 'reviewed').length || 0;
-  const fixedCount = reports?.filter(r => r.status === 'fixed').length || 0;
-  const dismissedCount = reports?.filter(r => r.status === 'dismissed').length || 0;
+  // Stats par statut (sur tous les reports)
+  const pendingCount = allReports?.filter(r => r.status === 'pending').length || 0;
+  const reviewedCount = allReports?.filter(r => r.status === 'reviewed').length || 0;
+  const fixedCount = allReports?.filter(r => r.status === 'fixed').length || 0;
+  const dismissedCount = allReports?.filter(r => r.status === 'dismissed').length || 0;
+
+  // Stats par type (sur tous les reports)
+  const contentCount = allReports?.filter(r => r.report_type === 'content').length || 0;
+  const uiCount = allReports?.filter(r => r.report_type === 'ui').length || 0;
+  const functionalityCount = allReports?.filter(r => r.report_type === 'functionality').length || 0;
 
   return (
     <div className="space-y-6">
@@ -87,7 +98,7 @@ export default function ErrorReportsPage() {
         </p>
       </div>
 
-      {/* Stats rapides */}
+      {/* Stats par statut */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className={statusFilter === 'pending' ? 'ring-2 ring-primary' : ''}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -153,6 +164,26 @@ export default function ErrorReportsPage() {
             </Button>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Stats par type - compact */}
+      <div className="flex items-center gap-4 text-sm">
+        <span className="text-muted-foreground">Par type :</span>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-100 dark:bg-blue-900/30">
+          <FileText className="h-3.5 w-3.5 text-blue-600" />
+          <span className="font-medium text-blue-700 dark:text-blue-400">{contentCount}</span>
+          <span className="text-blue-600/70 dark:text-blue-400/70">contenu</span>
+        </div>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-100 dark:bg-purple-900/30">
+          <Layout className="h-3.5 w-3.5 text-purple-600" />
+          <span className="font-medium text-purple-700 dark:text-purple-400">{uiCount}</span>
+          <span className="text-purple-600/70 dark:text-purple-400/70">interface</span>
+        </div>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-100 dark:bg-red-900/30">
+          <Bug className="h-3.5 w-3.5 text-red-600" />
+          <span className="font-medium text-red-700 dark:text-red-400">{functionalityCount}</span>
+          <span className="text-red-600/70 dark:text-red-400/70">fonctionnalité</span>
+        </div>
       </div>
 
       {/* Filtres */}
