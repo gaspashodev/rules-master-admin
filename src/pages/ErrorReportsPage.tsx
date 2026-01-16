@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,6 +44,7 @@ import {
   CheckCircle,
   XCircle,
   Eye,
+  Smartphone,
 } from 'lucide-react';
 
 const reportTypeLabels: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -250,6 +251,22 @@ export default function ErrorReportsPage() {
                         <p className="text-sm text-muted-foreground">
                           {report.description}
                         </p>
+
+                        {/* Device info */}
+                        {report.device_info && (
+                          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                            <Smartphone className="h-3 w-3" />
+                            <span className="font-medium">
+                              {report.device_info.deviceName}
+                            </span>
+                            <span className="capitalize">
+                              {report.device_info.platform === 'ios' ? 'iOS' : 'Android'} {report.device_info.osVersion}
+                            </span>
+                            <span className="bg-muted px-1.5 py-0.5 rounded">
+                              v{report.device_info.appVersion}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Actions */}

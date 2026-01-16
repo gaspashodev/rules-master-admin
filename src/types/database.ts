@@ -306,5 +306,11 @@ export interface ErrorReport {
   description: string;
   screenshot_url: string | null;
   status: ReportStatus;
+  device_info: {
+    platform: 'ios' | 'android';
+    osVersion: string | number;
+    appVersion: string;
+    deviceName: string;
+  } | null;
   created_at: string;
 }
