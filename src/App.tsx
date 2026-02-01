@@ -9,6 +9,11 @@ import { GameFormPage } from './pages/GameFormPage';
 import { ConceptFormPage } from './pages/ConceptFormPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ErrorReportsPage from './pages/ErrorReportsPage';
+import { FlaggedQuestionsPage } from './pages/quiz/FlaggedQuestionsPage';
+import { BggQuestionsPage } from './pages/quiz/BggQuestionsPage';
+import { BggQuestionFormPage } from './pages/quiz/BggQuestionFormPage';
+import { AwardsPage } from './pages/quiz/AwardsPage';
+import { BggGamesPage } from './pages/quiz/BggGamesPage';
 
 function App() {
   return (
@@ -35,6 +40,13 @@ function App() {
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/reports" element={<ErrorReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          {/* Quiz BGG routes */}
+          <Route path="/quiz/games" element={<BggGamesPage />} />
+          <Route path="/quiz/flagged" element={<FlaggedQuestionsPage />} />
+          <Route path="/quiz/questions" element={<BggQuestionsPage />} />
+          <Route path="/quiz/questions/new" element={<BggQuestionFormPage />} />
+          <Route path="/quiz/questions/:id" element={<BggQuestionFormPage />} />
+          <Route path="/quiz/awards" element={<AwardsPage />} />
         </Route>
       </Routes>
     </AuthProvider>

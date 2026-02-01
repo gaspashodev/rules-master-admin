@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -15,9 +15,19 @@ import { ImageUpload } from '@/components/ui/image-upload';
 import { useGame, useCreateGame, useUpdateGame } from '@/hooks/useGames';
 import { ConceptsList } from '@/components/games/ConceptsList';
 import { ResourcesEditor } from '@/components/games/ResourcesEditor';
+import { BggGameSearch } from '@/components/bgg-quiz';
+import { useBggGame } from '@/hooks/useBggQuiz';
 import { slugify } from '@/lib/utils';
 import type { GameFormData, Game } from '@/types/database';
-import { ArrowLeft, Save, Gamepad2 } from 'lucide-react';
+import { ArrowLeft, Save, Gamepad2, Download } from 'lucide-react';
+import { toast } from 'sonner';
+
+// Convert BGG weight to difficulty
+function weightToDifficulty(weight: number | null): 'beginner' | 'intermediate' | 'expert' {
+  if (!weight || weight < 2) return 'beginner';
+  if (weight < 3) return 'intermediate';
+  return 'expert';
+}
 
 export function GameFormPage() {
   const navigate = useNavigate();
@@ -153,6 +163,7 @@ export function GameFormPage() {
               watchName={watchName}
               gameId={id}
               game={game}
+              isEditing={true}
             />
           </TabsContent>
           <TabsContent value="concepts">
@@ -175,6 +186,7 @@ export function GameFormPage() {
           watchDifficulty={watchDifficulty}
           watchSlug={watchSlug}
           watchName={watchName}
+          isEditing={false}
         />
       )}
     </form>
@@ -192,6 +204,7 @@ interface FormFieldsProps {
   watchName: string;
   gameId?: string;
   game?: Game | null;
+  isEditing?: boolean;
 }
 
 function FormFields({
@@ -205,13 +218,71 @@ function FormFields({
   watchName,
   gameId,
   game,
+  isEditing,
 }: FormFieldsProps) {
   // Utiliser la valeur du jeu si disponible, sinon watchDifficulty
   const currentDifficulty = game?.difficulty || watchDifficulty || 'intermediate';
-  
+
+  // BGG import state
+  const [selectedBggId, setSelectedBggId] = useState<number | null>(null);
+  const { data: bggGameData } = useBggGame(selectedBggId || undefined);
+
+  // Auto-import when BGG data is loaded
+  useEffect(() => {
+    if (bggGameData && selectedBggId) {
+      // Fill form fields
+      if (!isEditing) {
+        setValue('name', bggGameData.name);
+        setValue('slug', slugify(bggGameData.name));
+      }
+
+      if (bggGameData.min_players) setValue('player_count_min', bggGameData.min_players);
+      if (bggGameData.max_players) setValue('player_count_max', bggGameData.max_players);
+      if (bggGameData.min_playtime) setValue('play_time_min', bggGameData.min_playtime);
+      if (bggGameData.max_playtime) setValue('play_time_max', bggGameData.max_playtime);
+      if (bggGameData.rating) setValue('bgg_rating', Math.round(bggGameData.rating * 10) / 10);
+      if (bggGameData.image_url) setValue('cover_image_url', bggGameData.image_url);
+      setValue('bgg_url', `https://boardgamegeek.com/boardgame/${bggGameData.bgg_id}`);
+
+      // Set difficulty based on weight
+      const difficulty = weightToDifficulty(bggGameData.weight);
+      setValue('difficulty', difficulty);
+
+      toast.success(`Données importées depuis BGG (difficulté: ${difficulty === 'beginner' ? 'débutant' : difficulty === 'intermediate' ? 'intermédiaire' : 'expert'})`);
+      setSelectedBggId(null);
+    }
+  }, [bggGameData, selectedBggId, isEditing, setValue]);
+
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2 space-y-6">
+        {/* BGG Import */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5" />
+              Importer depuis BGG
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label>Rechercher un jeu dans la base BGG</Label>
+              <BggGameSearch
+                value={{ bgg_id: 0, name: '' }}
+                onChange={(game) => {
+                  if (game.bgg_id) {
+                    setSelectedBggId(game.bgg_id);
+                  }
+                }}
+                placeholder="Rechercher un jeu pour pré-remplir les champs..."
+              />
+              <p className="text-xs text-muted-foreground">
+                Sélectionner un jeu pour remplir automatiquement les paramètres (joueurs, durée, note, difficulté, image)
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Informations de base</CardTitle>
