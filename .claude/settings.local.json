@@ -6,7 +6,14 @@
       "Bash(echo:*)",
       "Bash(npx vite:*)",
       "Bash(npm run lint)",
-      "Bash(timeout 10 npm run dev:*)"
+      "Bash(timeout 10 npm run dev:*)",
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "WebFetch(domain:pokemontcg.io)",
+      "WebFetch(domain:scryfall.com)",
+      "WebFetch(domain:docs.pokemontcg.io)",
+      "WebFetch(domain:api.pokemontcg.io)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

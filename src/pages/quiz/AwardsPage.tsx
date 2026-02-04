@@ -38,6 +38,7 @@ import {
 } from '@/hooks/useBggQuiz';
 import type { BggAward, BggAwardFormData, AwardName, AwardCategory } from '@/types/bgg-quiz';
 import { AWARD_NAMES, AWARD_CATEGORIES_BY_AWARD } from '@/types/bgg-quiz';
+import { BggGameSearch } from '@/components/bgg-quiz/BggGameSearch';
 import {
   Plus,
   Trash2,
@@ -58,14 +59,20 @@ const defaultFormData: BggAwardFormData = {
   award: "As d'Or",
   category: 'Tout public',
   year: new Date().getFullYear(),
-  bgg_id: 0,
-  game_name: '',
+  game_id: null,
 };
+
+interface SelectedGame {
+  id: string;
+  bgg_id: number;
+  name: string;
+}
 
 export function AwardsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAward, setEditingAward] = useState<BggAward | null>(null);
   const [formData, setFormData] = useState<BggAwardFormData>(defaultFormData);
+  const [selectedGame, setSelectedGame] = useState<SelectedGame | null>(null);
   const [expandedAwards, setExpandedAwards] = useState<Set<string>>(
     new Set(["As d'Or", 'Spiel des Jahres'])
   );
@@ -100,10 +107,11 @@ export function AwardsPage() {
   const openCreateDialog = () => {
     setEditingAward(null);
     setFormData(defaultFormData);
+    setSelectedGame(null);
     setIsDialogOpen(true);
   };
 
-  const openEditDialog = (award: BggAward) => {
+  const openEditDialog = async (award: BggAward) => {
     setEditingAward(award);
     // Normaliser le nom du prix pour correspondre aux clés de AWARD_CATEGORIES_BY_AWARD
     const normalizedAward: AwardName = AWARD_NAMES.includes(award.award as AwardName)
@@ -118,17 +126,40 @@ export function AwardsPage() {
       award: normalizedAward,
       category: normalizedCategory,
       year: award.year,
-      bgg_id: award.bgg_id,
-      game_name: award.game_name,
+      game_id: award.game_id,
     });
+
+    // Charger les infos du jeu depuis bgg_games_cache
+    if (award.game_id) {
+      const { supabase } = await import('@/lib/supabase');
+      const { data } = await supabase
+        .from('bgg_games_cache')
+        .select('id, bgg_id, name')
+        .eq('id', award.game_id)
+        .single();
+      if (data) {
+        setSelectedGame({ id: data.id, bgg_id: data.bgg_id, name: data.name });
+      } else {
+        setSelectedGame(null);
+      }
+    } else {
+      setSelectedGame(null);
+    }
     setIsDialogOpen(true);
   };
 
   const handleSubmit = async () => {
+    if (!selectedGame) return;
+
+    const dataToSubmit: BggAwardFormData = {
+      ...formData,
+      game_id: selectedGame.id,
+    };
+
     if (editingAward) {
-      await updateAward.mutateAsync({ id: editingAward.id, data: formData });
+      await updateAward.mutateAsync({ id: editingAward.id, data: dataToSubmit });
     } else {
-      await createAward.mutateAsync(formData);
+      await createAward.mutateAsync(dataToSubmit);
     }
     setIsDialogOpen(false);
   };
@@ -215,20 +246,24 @@ export function AwardsPage() {
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
                                       <Badge variant="outline">{award.category}</Badge>
-                                      <span className="font-medium">{award.game_name}</span>
+                                      <span className="font-medium">
+                                        {award.game?.name_fr || award.game?.name || 'Jeu inconnu'}
+                                      </span>
                                     </div>
-                                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                                                                            <a
-                                        href={`https://boardgamegeek.com/boardgame/${award.bgg_id}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-1 text-primary hover:underline"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        BGG #{award.bgg_id}
-                                        <ExternalLink className="h-3 w-3" />
-                                      </a>
-                                    </div>
+                                    {award.game?.bgg_id && (
+                                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                        <a
+                                          href={`https://boardgamegeek.com/boardgame/${award.game.bgg_id}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-1 text-primary hover:underline"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          BGG #{award.game.bgg_id}
+                                          <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <Button
@@ -354,26 +389,15 @@ export function AwardsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Nom du jeu</Label>
-              <Input
-                value={formData.game_name}
-                onChange={(e) =>
-                  setFormData((f) => ({ ...f, game_name: e.target.value }))
-                }
-                placeholder="Ex: Cascadia"
+              <Label>Jeu</Label>
+              <BggGameSearch
+                value={selectedGame}
+                onChange={setSelectedGame}
+                placeholder="Rechercher un jeu..."
               />
-            </div>
-            <div className="space-y-2">
-              <Label>BGG ID</Label>
-              <Input
-                type="number"
-                min={1}
-                value={formData.bgg_id || ''}
-                onChange={(e) =>
-                  setFormData((f) => ({ ...f, bgg_id: parseInt(e.target.value) || 0 }))
-                }
-                placeholder="Ex: 295947"
-              />
+              <p className="text-xs text-muted-foreground">
+                Recherchez dans la base ou ajoutez un nouveau jeu par son ID BGG
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -382,7 +406,7 @@ export function AwardsPage() {
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={isPending || !formData.game_name}
+              disabled={isPending || !selectedGame?.id}
             >
               {isPending ? 'Enregistrement...' : editingAward ? 'Modifier' : 'Ajouter'}
             </Button>

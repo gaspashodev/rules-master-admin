@@ -10,6 +10,10 @@ import {
   ListTodo,
   Trophy,
   Dices,
+  Sparkles,
+  Swords,
+  Castle,
+  Wand2,
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
@@ -23,6 +27,13 @@ const quizNavigation = [
   { name: 'Jeux BGG', href: '/quiz/games', icon: Dices },
   { name: 'Prix & Récompenses', href: '/quiz/awards', icon: Trophy },
   { name: 'Questions signalées', href: '/quiz/flagged', icon: Flag },
+];
+
+const tcgNavigation = [
+  { name: 'Cartes Pokémon', href: '/tcg/pokemon', icon: Sparkles },
+  { name: 'Cartes Yu-Gi-Oh!', href: '/tcg/yugioh', icon: Swords },
+  { name: 'Cartes Lorcana', href: '/tcg/lorcana', icon: Castle },
+  { name: 'Cartes Magic', href: '/tcg/magic', icon: Wand2 },
 ];
 
 const secondaryNavigation = [
@@ -79,6 +90,32 @@ export function Sidebar() {
           Quiz BGG
         </p>
         {quizNavigation.map((item) => {
+          const isActive =
+            location.pathname === item.href ||
+            (item.href !== '/' && location.pathname.startsWith(item.href));
+          return (
+            <Link
+              key={item.name}
+              to={item.href}
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              )}
+            >
+              <item.icon className="h-5 w-5" />
+              {item.name}
+            </Link>
+          );
+        })}
+
+        <Separator className="my-4" />
+
+        <p className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          TCG
+        </p>
+        {tcgNavigation.map((item) => {
           const isActive =
             location.pathname === item.href ||
             (item.href !== '/' && location.pathname.startsWith(item.href));

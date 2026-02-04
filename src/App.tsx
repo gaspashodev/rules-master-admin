@@ -14,6 +14,10 @@ import { BggQuestionsPage } from './pages/quiz/BggQuestionsPage';
 import { BggQuestionFormPage } from './pages/quiz/BggQuestionFormPage';
 import { AwardsPage } from './pages/quiz/AwardsPage';
 import { BggGamesPage } from './pages/quiz/BggGamesPage';
+import { PokemonCardsPage } from './pages/tcg/PokemonCardsPage';
+import { YugiohCardsPage } from './pages/tcg/YugiohCardsPage';
+import { LorcanaCardsPage } from './pages/tcg/LorcanaCardsPage';
+import { MagicCardsPage } from './pages/tcg/MagicCardsPage';
 
 function App() {
   return (
@@ -47,6 +51,11 @@ function App() {
           <Route path="/quiz/questions/new" element={<BggQuestionFormPage />} />
           <Route path="/quiz/questions/:id" element={<BggQuestionFormPage />} />
           <Route path="/quiz/awards" element={<AwardsPage />} />
+          {/* TCG routes */}
+          <Route path="/tcg/pokemon" element={<PokemonCardsPage />} />
+          <Route path="/tcg/yugioh" element={<YugiohCardsPage />} />
+          <Route path="/tcg/lorcana" element={<LorcanaCardsPage />} />
+          <Route path="/tcg/magic" element={<MagicCardsPage />} />
         </Route>
       </Routes>
     </AuthProvider>

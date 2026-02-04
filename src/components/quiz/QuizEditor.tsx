@@ -409,8 +409,6 @@ export function QuizEditor({ conceptId }: QuizEditorProps) {
                 bucket="quiz-images"
                 folder="questions"
                 aspectRatio="video"
-                maxWidth={800}
-                maxHeight={450}
               />
             </div>
 

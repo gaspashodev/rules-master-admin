@@ -131,6 +131,35 @@ export function BggGamesPage() {
           <CardTitle>Liste des jeux</CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Pagination top */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mb-4 pb-4 border-b">
+              <p className="text-sm text-muted-foreground">
+                Page {page + 1} sur {totalPages}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Précédent
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                >
+                  Suivant
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="space-y-2">
               {[...Array(10)].map((_, i) => (
@@ -164,7 +193,7 @@ export function BggGamesPage() {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-medium truncate">{game.name}</p>
+                      <p className="font-medium truncate">{game.name_fr || game.name}</p>
                       {game.year_published && (
                         <span className="text-sm text-muted-foreground">
                           ({game.year_published})
@@ -354,6 +383,7 @@ function EditGameDialog({
 }) {
   const [formData, setFormData] = useState({
     name: game.name,
+    name_fr: game.name_fr || '',
     year_published: game.year_published || '',
     image_url: game.image_url || '',
     description1: game.descriptions?.[0] || '',
@@ -403,6 +433,7 @@ function EditGameDialog({
 
     const data: Partial<BggGameCacheInsert> = {
       name: formData.name.trim(),
+      name_fr: formData.name_fr.trim() || null,
       year_published: formData.year_published ? Number(formData.year_published) : null,
       image_url: formData.image_url.trim() || null,
       descriptions: descriptions.length > 0 ? descriptions : null,
@@ -444,6 +475,16 @@ function EditGameDialog({
             <Input
               value={formData.name}
               onChange={(e) => setFormData(f => ({ ...f, name: e.target.value }))}
+            />
+          </div>
+
+          {/* Name FR */}
+          <div className="space-y-2">
+            <Label>Nom français</Label>
+            <Input
+              value={formData.name_fr}
+              onChange={(e) => setFormData(f => ({ ...f, name_fr: e.target.value }))}
+              placeholder="Laisser vide si identique au nom anglais"
             />
           </div>
 

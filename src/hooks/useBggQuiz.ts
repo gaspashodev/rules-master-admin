@@ -65,15 +65,18 @@ export function useFetchBggData() {
 // ============ BGG GAMES CACHE (Search) ============
 
 export interface BggGameCache {
-  id: number; // This is bgg_id for display purposes
+  id: string; // UUID
+  bgg_id: number;
   name: string;
   thumbnail: string | null;
   image: string | null;
 }
 
 export interface BggGameCacheFull {
+  id: string; // UUID
   bgg_id: number;
   name: string;
+  name_fr: string | null;
   year_published: number | null;
   image_url: string | null;
   descriptions: string[] | null;
@@ -112,7 +115,7 @@ export function useBggGames(filters?: BggGamesFilters) {
         .select('*', { count: 'exact' });
 
       if (search && search.length >= 2) {
-        query = query.ilike('name', `%${search}%`);
+        query = query.or(`name.ilike.%${search}%,name_fr.ilike.%${search}%`);
       }
 
       query = query
@@ -236,15 +239,16 @@ export function useSearchBggGames(searchTerm: string) {
 
       const { data, error } = await supabase
         .from('bgg_games_cache')
-        .select('bgg_id, name, image_url')
-        .ilike('name', `%${searchTerm}%`)
+        .select('id, bgg_id, name, name_fr, image_url')
+        .or(`name.ilike.%${searchTerm}%,name_fr.ilike.%${searchTerm}%`)
         .order('name')
         .limit(20);
 
       if (error) throw error;
       // Map to expected interface
       return (data || []).map(game => ({
-        id: game.bgg_id,
+        id: game.id,
+        bgg_id: game.bgg_id,
         name: game.name,
         thumbnail: game.image_url,
         image: game.image_url,
@@ -274,7 +278,7 @@ export async function fetchRandomGames(
   // Fetch more than needed to account for exclusions
   const { data, error } = await supabase
     .from('bgg_games_cache')
-    .select('bgg_id, name, image_url')
+    .select('id, bgg_id, name, image_url')
     .not('bgg_id', 'in', `(${excludeIds.join(',')})`)
     .limit(count * 3);
 
@@ -286,7 +290,8 @@ export async function fetchRandomGames(
   for (const item of shuffled) {
     if (!usedIds.has(item.bgg_id) && games.length < count) {
       games.push({
-        id: item.bgg_id,
+        id: item.id,
+        bgg_id: item.bgg_id,
         name: item.name,
         thumbnail: item.image_url,
         image: item.image_url,
@@ -301,6 +306,7 @@ export async function fetchRandomGames(
 export interface BggGameCacheInsert {
   bgg_id: number;
   name: string;
+  name_fr?: string | null;
   year_published?: number | null;
   image_url?: string | null;
   descriptions?: string[] | null;
@@ -322,12 +328,13 @@ export function useCreateBggGame() {
       const { data: game, error } = await supabase
         .from('bgg_games_cache')
         .insert([data])
-        .select('bgg_id, name, image_url')
+        .select('id, bgg_id, name, image_url')
         .single();
 
       if (error) throw error;
       return {
-        id: game.bgg_id,
+        id: game.id,
+        bgg_id: game.bgg_id,
         name: game.name,
         thumbnail: game.image_url,
         image: game.image_url,
@@ -640,7 +647,10 @@ export function useBggAwards() {
     queryFn: async (): Promise<BggAward[]> => {
       const { data, error } = await supabase
         .from('bgg_awards')
-        .select('*')
+        .select(`
+          *,
+          game:bgg_games_cache!game_id(bgg_id, name, name_fr)
+        `)
         .order('year', { ascending: false })
         .order('award', { ascending: true })
         .order('category', { ascending: true });

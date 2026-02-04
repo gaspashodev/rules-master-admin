@@ -163,17 +163,21 @@ export interface BggAward {
   award: AwardName;
   category: AwardCategory;
   year: number;
-  bgg_id: number;
-  game_name: string;
+  game_id: string | null;
   created_at: string;
+  // Joined from bgg_games_cache
+  game?: {
+    bgg_id: number;
+    name: string;
+    name_fr: string | null;
+  } | null;
 }
 
 export interface BggAwardFormData {
   award: AwardName;
   category: AwardCategory;
   year: number;
-  bgg_id: number;
-  game_name: string;
+  game_id: string | null;
 }
 
 // ============ BGG QUESTIONS FILTERS ============
