@@ -8,10 +8,10 @@ export interface DashboardStats {
   featuredGames: number;
   totalConcepts: number;
   totalSections: number;
-  totalQuizzes: number;
-  totalQuestions: number;
+  totalBggGames: number;
+  totalTcgCards: number;
   recentGames: RecentGame[];
-  gamesByDifficulty: { difficulty: string; count: number }[];
+  cardsByTcgType: { name: string; count: number }[];
   contentOverTime: { date: string; games: number; concepts: number }[];
 }
 
@@ -31,7 +31,7 @@ export function useStats() {
       // Fetch games
       const { data: games, error: gamesError } = await supabase
         .from('games')
-        .select('id, name, cover_image_url, published, featured, difficulty, created_at')
+        .select('id, name, cover_image_url, published, featured, created_at')
         .order('created_at', { ascending: false });
 
       if (gamesError) throw gamesError;
@@ -50,18 +50,27 @@ export function useStats() {
 
       if (sectionsError) throw sectionsError;
 
-      // Fetch quizzes and questions
-      const { data: quizzes, error: quizzesError } = await supabase
-        .from('quizzes')
-        .select('id');
+      // Fetch BGG games count
+      const { count: bggGamesCount, error: bggError } = await supabase
+        .from('bgg_games_cache')
+        .select('*', { count: 'exact', head: true });
 
-      if (quizzesError) throw quizzesError;
+      if (bggError) throw bggError;
 
-      const { data: questions, error: questionsError } = await supabase
-        .from('quiz_questions')
-        .select('id');
+      // Fetch TCG cards count
+      const { count: tcgCardsCount, error: tcgError } = await supabase
+        .from('tcg_cards_cache')
+        .select('*', { count: 'exact', head: true });
 
-      if (questionsError) throw questionsError;
+      if (tcgError) throw tcgError;
+
+      // Fetch TCG cards count by type (separate count queries to avoid row limits)
+      const [pokemonCount, yugiohCount, lorcanaCount, magicCount] = await Promise.all([
+        supabase.from('tcg_cards_cache').select('*', { count: 'exact', head: true }).eq('tcg_type', 'pokemon'),
+        supabase.from('tcg_cards_cache').select('*', { count: 'exact', head: true }).eq('tcg_type', 'yugioh'),
+        supabase.from('tcg_cards_cache').select('*', { count: 'exact', head: true }).eq('tcg_type', 'lorcana'),
+        supabase.from('tcg_cards_cache').select('*', { count: 'exact', head: true }).eq('tcg_type', 'magic'),
+      ]);
 
       // Calculate stats
       const totalGames = games?.length || 0;
@@ -70,8 +79,8 @@ export function useStats() {
       const featuredGames = games?.filter((g) => g.featured).length || 0;
       const totalConcepts = concepts?.length || 0;
       const totalSections = sections?.length || 0;
-      const totalQuizzes = quizzes?.length || 0;
-      const totalQuestions = questions?.length || 0;
+      const totalBggGames = bggGamesCount || 0;
+      const totalTcgCards = tcgCardsCount || 0;
 
       // Concepts count per game
       const conceptCountByGame = (concepts || []).reduce((acc, c) => {
@@ -89,17 +98,13 @@ export function useStats() {
         concept_count: conceptCountByGame[g.id] || 0,
       }));
 
-      // Games by difficulty
-      const difficultyCount = (games || []).reduce((acc, g) => {
-        acc[g.difficulty] = (acc[g.difficulty] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      const gamesByDifficulty = [
-        { difficulty: 'Débutant', count: difficultyCount['beginner'] || 0 },
-        { difficulty: 'Intermédiaire', count: difficultyCount['intermediate'] || 0 },
-        { difficulty: 'Expert', count: difficultyCount['expert'] || 0 },
-      ];
+      // Cards by TCG type
+      const cardsByTcgType = [
+        { name: 'Pokémon', count: pokemonCount.count || 0 },
+        { name: 'Yu-Gi-Oh!', count: yugiohCount.count || 0 },
+        { name: 'Lorcana', count: lorcanaCount.count || 0 },
+        { name: 'Magic', count: magicCount.count || 0 },
+      ].filter(t => t.count > 0);
 
       // Content over time (last 6 months)
       const now = new Date();
@@ -131,10 +136,10 @@ export function useStats() {
         featuredGames,
         totalConcepts,
         totalSections,
-        totalQuizzes,
-        totalQuestions,
+        totalBggGames,
+        totalTcgCards,
         recentGames,
-        gamesByDifficulty,
+        cardsByTcgType,
         contentOverTime,
       };
     },

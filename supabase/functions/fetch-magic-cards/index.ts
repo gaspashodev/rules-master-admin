@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
 
         const cardData = {
           external_id: card.id,
-          tcg_type: 'magic',
+          tcg_type: 'magic' as const,
           name: card.name,
           set_id: card.set,
           set_name: card.set_name,
@@ -175,31 +175,38 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         };
 
-        const { error } = await supabase
+        // Check if card already exists
+        const { data: existing } = await supabase
           .from('tcg_cards_cache')
-          .upsert(cardData, {
-            onConflict: 'tcg_type,external_id',
-          });
+          .select('id')
+          .eq('external_id', card.id)
+          .eq('tcg_type', 'magic')
+          .single();
 
-        if (error) {
-          console.error(`Error upserting card ${card.id}:`, error);
-          errors.push(`${card.name}: ${error.message}`);
-        } else {
-          const { data: existing } = await supabase
+        if (existing) {
+          // Update existing card
+          const { error } = await supabase
             .from('tcg_cards_cache')
-            .select('created_at, updated_at')
-            .eq('external_id', card.id)
-            .eq('tcg_type', 'magic')
-            .single();
+            .update(cardData)
+            .eq('id', existing.id);
 
-          if (existing) {
-            const createdAt = new Date(existing.created_at).getTime();
-            const updatedAt = new Date(existing.updated_at).getTime();
-            if (updatedAt - createdAt < 1000) {
-              inserted++;
-            } else {
-              updated++;
-            }
+          if (error) {
+            console.error(`Error updating card ${card.id}:`, error);
+            errors.push(`${card.name}: ${error.message}`);
+          } else {
+            updated++;
+          }
+        } else {
+          // Insert new card
+          const { error } = await supabase
+            .from('tcg_cards_cache')
+            .insert(cardData);
+
+          if (error) {
+            console.error(`Error inserting card ${card.id}:`, error);
+            errors.push(`${card.name}: ${error.message}`);
+          } else {
+            inserted++;
           }
         }
       } catch (err) {

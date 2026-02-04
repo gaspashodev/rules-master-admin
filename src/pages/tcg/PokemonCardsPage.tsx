@@ -19,11 +19,12 @@ import {
   useDeleteTcgCard,
   useTcgCardsStats,
   useImportedSets,
+  useTcgSetsFromDb,
 } from '@/hooks/useTcgCards';
 import type { TcgCard } from '@/types/tcg';
 import { Search, Trash2, ExternalLink, ChevronLeft, ChevronRight, Download, Loader2, Image, Check } from 'lucide-react';
 
-type SortOption = 'name-asc' | 'release_date-desc' | 'hp-desc' | 'created_at-desc';
+type SortOption = 'name-asc' | 'release_date-desc' | 'created_at-desc';
 
 export function PokemonCardsPage() {
   const [search, setSearch] = useState('');
@@ -35,7 +36,7 @@ export function PokemonCardsPage() {
   const [selectedCard, setSelectedCard] = useState<TcgCard | null>(null);
 
   // Parse sort option
-  const [sortBy, sortOrder] = sortOption.split('-') as ['name' | 'release_date' | 'hp' | 'created_at', 'asc' | 'desc'];
+  const [sortBy, sortOrder] = sortOption.split('-') as ['name' | 'release_date' | 'created_at', 'asc' | 'desc'];
 
   const pageSize = 50;
   const { data, isLoading } = useTcgCards({
@@ -48,6 +49,7 @@ export function PokemonCardsPage() {
     sortOrder,
   });
   const { data: stats } = useTcgCardsStats('pokemon');
+  const { data: setsFromDb } = useTcgSetsFromDb('pokemon');
   const deleteCard = useDeleteTcgCard();
 
   // Debounce search
@@ -65,11 +67,6 @@ export function PokemonCardsPage() {
   };
 
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
-
-  // Get unique sets from current data for filter
-  const uniqueSets = data?.data
-    ? [...new Set(data.data.map(c => c.set_name).filter(Boolean))]
-    : [];
 
   return (
     <div className="space-y-6">
@@ -100,15 +97,15 @@ export function PokemonCardsPage() {
                 className="pl-10"
               />
             </div>
-            {uniqueSets.length > 0 && (
+            {setsFromDb && setsFromDb.length > 0 && (
               <Select value={selectedSet} onValueChange={(v) => { setSelectedSet(v === 'all' ? '' : v); setPage(0); }}>
                 <SelectTrigger className="w-[250px]">
                   <SelectValue placeholder="Tous les sets" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les sets</SelectItem>
-                  {uniqueSets.sort().map((set) => (
-                    <SelectItem key={set} value={set!}>{set}</SelectItem>
+                  {setsFromDb.map((set) => (
+                    <SelectItem key={set} value={set}>{set}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -121,7 +118,6 @@ export function PokemonCardsPage() {
                 <SelectItem value="created_at-desc">Plus récents</SelectItem>
                 <SelectItem value="name-asc">Nom (A-Z)</SelectItem>
                 <SelectItem value="release_date-desc">Date de sortie</SelectItem>
-                <SelectItem value="hp-desc">PV (décroissant)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -481,6 +477,24 @@ function CardDetailDialog({
   card: TcgCard;
   onClose: () => void;
 }) {
+  // Get Pokemon-specific data from extra_data (or fallback to legacy columns)
+  const extra = card.extra_data as {
+    hp?: number;
+    set_series?: string;
+    attacks?: Array<{ name: string; cost: string[]; damage: string; text: string }>;
+    weaknesses?: Array<{ type: string; value: string }>;
+    resistances?: Array<{ type: string; value: string }>;
+    retreat_cost?: number;
+    national_pokedex_number?: number;
+    supertype?: string;
+  } | null;
+
+  const hp = extra?.hp ?? card.hp;
+  const attacks = extra?.attacks ?? card.attacks;
+  const weaknesses = extra?.weaknesses ?? card.weaknesses;
+  const resistances = extra?.resistances ?? card.resistances;
+  const retreatCost = extra?.retreat_cost ?? card.retreat_cost;
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-lg" aria-describedby={undefined}>
@@ -511,8 +525,8 @@ function CardDetailDialog({
             </div>
 
             <div className="space-y-1 text-sm">
-              {card.hp && (
-                <p><span className="text-muted-foreground">PV :</span> {card.hp}</p>
+              {hp && (
+                <p><span className="text-muted-foreground">PV :</span> {hp}</p>
               )}
               {card.types && card.types.length > 0 && (
                 <p><span className="text-muted-foreground">Type :</span> {card.types.join(', ')}</p>
@@ -526,13 +540,34 @@ function CardDetailDialog({
               {card.artist && (
                 <p><span className="text-muted-foreground">Artiste :</span> {card.artist}</p>
               )}
+              {retreatCost && (
+                <p><span className="text-muted-foreground">Coût de retraite :</span> {retreatCost}</p>
+              )}
             </div>
 
+            {/* Weaknesses & Resistances */}
+            {(weaknesses?.length || resistances?.length) && (
+              <div className="flex gap-4 text-xs">
+                {weaknesses && weaknesses.length > 0 && (
+                  <div>
+                    <span className="text-muted-foreground">Faiblesse :</span>{' '}
+                    {weaknesses.map(w => `${w.type} ${w.value}`).join(', ')}
+                  </div>
+                )}
+                {resistances && resistances.length > 0 && (
+                  <div>
+                    <span className="text-muted-foreground">Résistance :</span>{' '}
+                    {resistances.map(r => `${r.type} ${r.value}`).join(', ')}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Attacks */}
-            {card.attacks && card.attacks.length > 0 && (
+            {attacks && attacks.length > 0 && (
               <div className="space-y-2">
                 <p className="font-medium text-sm">Attaques :</p>
-                {card.attacks.map((attack, i) => (
+                {attacks.map((attack, i) => (
                   <div key={i} className="text-xs bg-muted p-2 rounded">
                     <p className="font-medium">{attack.name} - {attack.damage || '—'}</p>
                     {attack.text && <p className="text-muted-foreground mt-1">{attack.text}</p>}

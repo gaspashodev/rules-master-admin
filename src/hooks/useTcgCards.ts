@@ -368,11 +368,13 @@ export function useTcgSetsFromDb(tcgType: TcgType = 'pokemon') {
   return useQuery({
     queryKey: ['tcg-cards', 'sets', tcgType],
     queryFn: async (): Promise<string[]> => {
+      // Use a larger limit to get all cards, Supabase defaults to 1000
       const { data, error } = await supabase
         .from('tcg_cards_cache')
         .select('set_name')
         .eq('tcg_type', tcgType)
-        .not('set_name', 'is', null);
+        .not('set_name', 'is', null)
+        .limit(50000);
 
       if (error) throw error;
 
@@ -398,7 +400,8 @@ export function useImportedSets(tcgType: TcgType = 'pokemon') {
         .from('tcg_cards_cache')
         .select('set_id, set_name')
         .eq('tcg_type', tcgType)
-        .not('set_id', 'is', null);
+        .not('set_id', 'is', null)
+        .limit(50000);
 
       if (error) throw error;
 
@@ -433,7 +436,8 @@ export function useTcgRaritiesFromDb(tcgType: TcgType = 'pokemon') {
         .from('tcg_cards_cache')
         .select('rarity')
         .eq('tcg_type', tcgType)
-        .not('rarity', 'is', null);
+        .not('rarity', 'is', null)
+        .limit(50000);
 
       if (error) throw error;
 

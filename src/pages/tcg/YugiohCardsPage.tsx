@@ -19,6 +19,7 @@ import {
   useDeleteTcgCard,
   useTcgCardsStats,
   useImportedSets,
+  useTcgSetsFromDb,
 } from '@/hooks/useTcgCards';
 import type { TcgCard } from '@/types/tcg';
 import { Search, Trash2, ExternalLink, ChevronLeft, ChevronRight, Download, Loader2, Image, Check } from 'lucide-react';
@@ -47,6 +48,7 @@ export function YugiohCardsPage() {
     sortOrder,
   });
   const { data: stats } = useTcgCardsStats('yugioh');
+  const { data: setsFromDb } = useTcgSetsFromDb('yugioh');
   const deleteCard = useDeleteTcgCard();
 
   const handleSearchChange = (value: string) => {
@@ -63,10 +65,6 @@ export function YugiohCardsPage() {
   };
 
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
-
-  const uniqueSets = data?.data
-    ? [...new Set(data.data.map(c => c.set_name).filter(Boolean))]
-    : [];
 
   return (
     <div className="space-y-6">
@@ -95,15 +93,15 @@ export function YugiohCardsPage() {
                 className="pl-10"
               />
             </div>
-            {uniqueSets.length > 0 && (
+            {setsFromDb && setsFromDb.length > 0 && (
               <Select value={selectedSet} onValueChange={(v) => { setSelectedSet(v === 'all' ? '' : v); setPage(0); }}>
                 <SelectTrigger className="w-[250px]">
                   <SelectValue placeholder="Tous les sets" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les sets</SelectItem>
-                  {uniqueSets.sort().map((set) => (
-                    <SelectItem key={set} value={set!}>{set}</SelectItem>
+                  {setsFromDb.map((set) => (
+                    <SelectItem key={set} value={set}>{set}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

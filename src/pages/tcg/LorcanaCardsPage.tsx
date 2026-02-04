@@ -19,6 +19,7 @@ import {
   useDeleteTcgCard,
   useTcgCardsStats,
   useImportedSets,
+  useTcgSetsFromDb,
 } from '@/hooks/useTcgCards';
 import type { TcgCard } from '@/types/tcg';
 import { Search, Trash2, ExternalLink, ChevronLeft, ChevronRight, Download, Loader2, Image, Check } from 'lucide-react';
@@ -47,6 +48,7 @@ export function LorcanaCardsPage() {
     sortOrder,
   });
   const { data: stats } = useTcgCardsStats('lorcana');
+  const { data: setsFromDb } = useTcgSetsFromDb('lorcana');
   const deleteCard = useDeleteTcgCard();
 
   const handleSearchChange = (value: string) => {
@@ -63,10 +65,6 @@ export function LorcanaCardsPage() {
   };
 
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
-
-  const uniqueSets = data?.data
-    ? [...new Set(data.data.map(c => c.set_name).filter(Boolean))]
-    : [];
 
   return (
     <div className="space-y-6">
@@ -95,15 +93,15 @@ export function LorcanaCardsPage() {
                 className="pl-10"
               />
             </div>
-            {uniqueSets.length > 0 && (
+            {setsFromDb && setsFromDb.length > 0 && (
               <Select value={selectedSet} onValueChange={(v) => { setSelectedSet(v === 'all' ? '' : v); setPage(0); }}>
                 <SelectTrigger className="w-[250px]">
                   <SelectValue placeholder="Tous les sets" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les sets</SelectItem>
-                  {uniqueSets.sort().map((set) => (
-                    <SelectItem key={set} value={set!}>{set}</SelectItem>
+                  {setsFromDb.map((set) => (
+                    <SelectItem key={set} value={set}>{set}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -266,6 +264,7 @@ function ImportCardsDialog({
   onClose: () => void;
 }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [importingSetNum, setImportingSetNum] = useState<number | 'all' | 'search' | null>(null);
 
   const { data: sets, isLoading: loadingSets } = useLorcanaSets();
   const { data: importedSets } = useImportedSets('lorcana');
@@ -277,19 +276,34 @@ function ImportCardsDialog({
 
   const handleSearchImport = async () => {
     if (!searchQuery) return;
-    await fetchCards.mutateAsync({
-      query: searchQuery,
-    });
+    setImportingSetNum('search');
+    try {
+      await fetchCards.mutateAsync({
+        query: searchQuery,
+      });
+    } finally {
+      setImportingSetNum(null);
+    }
   };
 
   const handleImportSet = async (setNum: number) => {
-    await fetchCards.mutateAsync({
-      setNum,
-    });
+    setImportingSetNum(setNum);
+    try {
+      await fetchCards.mutateAsync({
+        setNum,
+      });
+    } finally {
+      setImportingSetNum(null);
+    }
   };
 
   const handleImportAll = async () => {
-    await fetchCards.mutateAsync({});
+    setImportingSetNum('all');
+    try {
+      await fetchCards.mutateAsync({});
+    } finally {
+      setImportingSetNum(null);
+    }
   };
 
   return (
@@ -315,7 +329,7 @@ function ImportCardsDialog({
                 onClick={handleSearchImport}
                 disabled={fetchCards.isPending || !searchQuery}
               >
-                {fetchCards.isPending ? (
+                {importingSetNum === 'search' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Search className="h-4 w-4" />
@@ -333,7 +347,7 @@ function ImportCardsDialog({
                 onClick={handleImportAll}
                 disabled={fetchCards.isPending}
               >
-                {fetchCards.isPending ? (
+                {importingSetNum === 'all' ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
                   <Download className="h-4 w-4 mr-2" />
@@ -392,7 +406,7 @@ function ImportCardsDialog({
                           disabled={fetchCards.isPending || isComplete}
                           className={isComplete ? 'text-green-600' : ''}
                         >
-                          {fetchCards.isPending ? (
+                          {importingSetNum === set.Set_Num ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : isComplete ? (
                             <Check className="h-4 w-4" />
@@ -413,11 +427,28 @@ function ImportCardsDialog({
               <p>
                 <strong>Résultat :</strong> {fetchCards.data.inserted} ajoutées,{' '}
                 {fetchCards.data.updated} mises à jour
+                {fetchCards.data.skipped > 0 && (
+                  <span className="text-yellow-600">
+                    , {fetchCards.data.skipped} ignorées (image manquante)
+                  </span>
+                )}
               </p>
-              {fetchCards.data.errors.length > 0 && (
-                <p className="text-destructive mt-1">
-                  {fetchCards.data.errors.length} erreur(s)
-                </p>
+              {fetchCards.data.errors && fetchCards.data.errors.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-destructive font-medium">
+                    {fetchCards.data.errors.length} erreur(s) :
+                  </p>
+                  <div className="max-h-[150px] overflow-y-auto mt-1 text-xs text-destructive/80 space-y-1">
+                    {fetchCards.data.errors.slice(0, 10).map((err, i) => (
+                      <p key={i}>{err}</p>
+                    ))}
+                    {fetchCards.data.errors.length > 10 && (
+                      <p className="text-muted-foreground">
+                        ... et {fetchCards.data.errors.length - 10} autres erreurs
+                      </p>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           )}

@@ -112,16 +112,22 @@ Deno.serve(async (req) => {
 
     for (const card of cards) {
       try {
-        // Get first set info if available
-        const firstSet = card.card_sets?.[0];
+        // Find the requested set in card's sets, or use first set as fallback
+        let targetSet = card.card_sets?.[0];
+        if (setName && card.card_sets) {
+          const requestedSet = card.card_sets.find(s => s.set_name === setName);
+          if (requestedSet) {
+            targetSet = requestedSet;
+          }
+        }
         const mainImage = card.card_images[0];
 
         const cardData = {
           external_id: card.id.toString(),
-          tcg_type: 'yugioh',
+          tcg_type: 'yugioh' as const,
           name: card.name,
-          set_id: firstSet?.set_code || null,
-          set_name: firstSet?.set_name || null,
+          set_id: targetSet?.set_code || null,
+          set_name: targetSet?.set_name || null,
           set_series: null,
           release_date: null, // YGOProDeck doesn't provide release dates per card
           image_url: mainImage?.image_url || null,
@@ -129,7 +135,7 @@ Deno.serve(async (req) => {
           hp: null, // Yu-Gi-Oh doesn't have HP
           types: card.type ? [card.type] : [],
           subtypes: card.race ? [card.race] : [],
-          rarity: firstSet?.set_rarity || null,
+          rarity: targetSet?.set_rarity || null,
           attacks: null,
           abilities: null,
           weaknesses: null,
@@ -150,31 +156,38 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         };
 
-        const { error } = await supabase
+        // Check if card already exists
+        const { data: existing } = await supabase
           .from('tcg_cards_cache')
-          .upsert(cardData, {
-            onConflict: 'tcg_type,external_id',
-          });
+          .select('id')
+          .eq('external_id', card.id.toString())
+          .eq('tcg_type', 'yugioh')
+          .single();
 
-        if (error) {
-          console.error(`Error upserting card ${card.id}:`, error);
-          errors.push(`${card.name}: ${error.message}`);
-        } else {
-          const { data: existing } = await supabase
+        if (existing) {
+          // Update existing card
+          const { error } = await supabase
             .from('tcg_cards_cache')
-            .select('created_at, updated_at')
-            .eq('external_id', card.id.toString())
-            .eq('tcg_type', 'yugioh')
-            .single();
+            .update(cardData)
+            .eq('id', existing.id);
 
-          if (existing) {
-            const createdAt = new Date(existing.created_at).getTime();
-            const updatedAt = new Date(existing.updated_at).getTime();
-            if (updatedAt - createdAt < 1000) {
-              inserted++;
-            } else {
-              updated++;
-            }
+          if (error) {
+            console.error(`Error updating card ${card.id}:`, error);
+            errors.push(`${card.name}: ${error.message}`);
+          } else {
+            updated++;
+          }
+        } else {
+          // Insert new card
+          const { error } = await supabase
+            .from('tcg_cards_cache')
+            .insert(cardData);
+
+          if (error) {
+            console.error(`Error inserting card ${card.id}:`, error);
+            errors.push(`${card.name}: ${error.message}`);
+          } else {
+            inserted++;
           }
         }
       } catch (err) {

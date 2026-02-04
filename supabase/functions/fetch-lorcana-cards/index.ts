@@ -47,12 +47,15 @@ Deno.serve(async (req) => {
     const params: FetchParams = await req.json();
     const { setNum, query, color } = params;
 
+    console.log('Received params:', JSON.stringify(params));
+
     // Build API URL - Lorcana API
     // API uses /cards/all for all cards, /cards/fetch?search=... for filtering
     let apiUrl = 'https://api.lorcana-api.com/cards';
     const searchParts: string[] = [];
 
-    if (setNum) {
+    // Use !== undefined to handle setNum=0 case
+    if (setNum !== undefined && setNum !== null) {
       searchParts.push(`set_num=${setNum}`);
     }
     if (query) {
@@ -64,9 +67,11 @@ Deno.serve(async (req) => {
 
     if (searchParts.length > 0) {
       // Lorcana API uses search parameter with semicolon-separated conditions
-      apiUrl += `/fetch?search=${searchParts.join(';')}`;
+      // Add pagesize=250 to get all cards from a set (max set size is ~204)
+      apiUrl += `/fetch?search=${searchParts.join(';')}&pagesize=250`;
     } else {
-      apiUrl += '/all';
+      // For /all endpoint, also increase pagesize
+      apiUrl += '/all?pagesize=2500';
     }
 
     console.log('Fetching from Lorcana API:', apiUrl);
@@ -83,6 +88,7 @@ Deno.serve(async (req) => {
 
     let inserted = 0;
     let updated = 0;
+    let skipped = 0;
     const errors: string[] = [];
 
     for (const card of cards) {
@@ -90,9 +96,50 @@ Deno.serve(async (req) => {
         // Create unique external_id from set and card number
         const externalId = `${card.Set_ID}-${card.Card_Num}`;
 
+        // Skip cards without image URL
+        if (!card.Image) {
+          console.log(`Skipping ${card.Name}: no image URL`);
+          skipped++;
+          continue;
+        }
+
+        // Verify image exists with HEAD request
+        try {
+          const imageCheck = await fetch(card.Image, { method: 'HEAD' });
+          if (!imageCheck.ok) {
+            console.log(`Skipping ${card.Name}: image not found (${imageCheck.status})`);
+            skipped++;
+            continue;
+          }
+        } catch {
+          console.log(`Skipping ${card.Name}: image check failed`);
+          skipped++;
+          continue;
+        }
+
+        // Handle Classifications - can be array or comma-separated string
+        let subtypes: string[] = [];
+        if (card.Classifications) {
+          if (Array.isArray(card.Classifications)) {
+            subtypes = card.Classifications;
+          } else if (typeof card.Classifications === 'string') {
+            subtypes = card.Classifications.split(', ').map(s => s.trim()).filter(Boolean);
+          }
+        }
+
+        // Handle Abilities - can be array or other types
+        let abilities: { name: string; text: string }[] | null = null;
+        if (card.Abilities) {
+          if (Array.isArray(card.Abilities)) {
+            abilities = card.Abilities.map(a => ({ name: String(a), text: '' }));
+          } else if (typeof card.Abilities === 'string') {
+            abilities = [{ name: card.Abilities, text: '' }];
+          }
+        }
+
         const cardData = {
           external_id: externalId,
-          tcg_type: 'lorcana',
+          tcg_type: 'lorcana' as const,
           name: card.Name,
           set_id: card.Set_ID,
           set_name: card.Set_Name,
@@ -102,10 +149,10 @@ Deno.serve(async (req) => {
           image_url_small: card.Image, // Lorcana API doesn't provide small images
           hp: null,
           types: card.Color ? [card.Color] : [],
-          subtypes: card.Classifications || [],
+          subtypes,
           rarity: card.Rarity,
           attacks: null,
-          abilities: card.Abilities ? card.Abilities.map(a => ({ name: a, text: '' })) : null,
+          abilities,
           weaknesses: null,
           resistances: null,
           retreat_cost: null,
@@ -126,31 +173,38 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         };
 
-        const { error } = await supabase
+        // Check if card already exists
+        const { data: existing } = await supabase
           .from('tcg_cards_cache')
-          .upsert(cardData, {
-            onConflict: 'tcg_type,external_id',
-          });
+          .select('id')
+          .eq('external_id', externalId)
+          .eq('tcg_type', 'lorcana')
+          .single();
 
-        if (error) {
-          console.error(`Error upserting card ${externalId}:`, error);
-          errors.push(`${card.Name}: ${error.message}`);
-        } else {
-          const { data: existing } = await supabase
+        if (existing) {
+          // Update existing card
+          const { error } = await supabase
             .from('tcg_cards_cache')
-            .select('created_at, updated_at')
-            .eq('external_id', externalId)
-            .eq('tcg_type', 'lorcana')
-            .single();
+            .update(cardData)
+            .eq('id', existing.id);
 
-          if (existing) {
-            const createdAt = new Date(existing.created_at).getTime();
-            const updatedAt = new Date(existing.updated_at).getTime();
-            if (updatedAt - createdAt < 1000) {
-              inserted++;
-            } else {
-              updated++;
-            }
+          if (error) {
+            console.error(`Error updating card ${externalId}:`, error);
+            errors.push(`${card.Name}: ${error.message}`);
+          } else {
+            updated++;
+          }
+        } else {
+          // Insert new card
+          const { error } = await supabase
+            .from('tcg_cards_cache')
+            .insert(cardData);
+
+          if (error) {
+            console.error(`Error inserting card ${externalId}:`, error);
+            errors.push(`${card.Name}: ${error.message}`);
+          } else {
+            inserted++;
           }
         }
       } catch (err) {
@@ -165,6 +219,7 @@ Deno.serve(async (req) => {
         total: cards.length,
         inserted,
         updated,
+        skipped,
         errors,
       }),
       {

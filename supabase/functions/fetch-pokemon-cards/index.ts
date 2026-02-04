@@ -68,6 +68,8 @@ Deno.serve(async (req) => {
     const params: FetchParams = await req.json();
     const { setId, query, page = 1, pageSize = 50 } = params;
 
+    console.log('Received params:', JSON.stringify(params));
+
     // Construire la requête vers l'API Pokemon TCG
     let apiUrl = `https://api.pokemontcg.io/v2/cards?page=${page}&pageSize=${pageSize}`;
 
@@ -122,56 +124,72 @@ Deno.serve(async (req) => {
 
         const cardData = {
           external_id: card.id,
-          tcg_type: 'pokemon',
+          tcg_type: 'pokemon' as const,
           name: card.name,
           set_id: card.set.id,
           set_name: card.set.name,
-          set_series: card.set.series,
+          set_series: null, // Moved to extra_data
           release_date: releaseDate,
           image_url: card.images.large,
           image_url_small: card.images.small,
-          hp: card.hp ? parseInt(card.hp) : null,
+          hp: null, // Moved to extra_data
           types: card.types || [],
           subtypes: card.subtypes || [],
           rarity: card.rarity || null,
-          attacks: card.attacks || null,
+          attacks: null, // Moved to extra_data
           abilities: card.abilities || null,
-          weaknesses: card.weaknesses || null,
-          resistances: card.resistances || null,
-          retreat_cost: card.retreatCost?.length || null,
+          weaknesses: null, // Moved to extra_data
+          resistances: null, // Moved to extra_data
+          retreat_cost: null, // Moved to extra_data
           artist: card.artist || null,
           flavor_text: card.flavorText || null,
-          national_pokedex_number: card.nationalPokedexNumbers?.[0] || null,
+          national_pokedex_number: null, // Moved to extra_data
+          // Pokemon-specific data in extra_data for consistency with other TCGs
+          extra_data: {
+            hp: card.hp && !isNaN(parseInt(card.hp)) ? parseInt(card.hp) : null,
+            set_series: card.set.series,
+            attacks: card.attacks || null,
+            weaknesses: card.weaknesses || null,
+            resistances: card.resistances || null,
+            retreat_cost: card.retreatCost?.length || null,
+            national_pokedex_number: card.nationalPokedexNumbers?.[0] || null,
+            supertype: card.supertype,
+          },
           updated_at: new Date().toISOString(),
         };
 
-        // Upsert dans la base
-        const { error } = await supabase
+        // Check if card already exists
+        const { data: existing } = await supabase
           .from('tcg_cards_cache')
-          .upsert(cardData, {
-            onConflict: 'tcg_type,external_id',
-          });
+          .select('id')
+          .eq('external_id', card.id)
+          .eq('tcg_type', 'pokemon')
+          .single();
 
-        if (error) {
-          console.error(`Error upserting card ${card.id}:`, error);
-          errors.push(`${card.name}: ${error.message}`);
-        } else {
-          // Vérifier si c'était un insert ou update
-          const { data: existing } = await supabase
+        if (existing) {
+          // Update existing card
+          const { error } = await supabase
             .from('tcg_cards_cache')
-            .select('created_at, updated_at')
-            .eq('external_id', card.id)
-            .eq('tcg_type', 'pokemon')
-            .single();
+            .update(cardData)
+            .eq('id', existing.id);
 
-          if (existing) {
-            const createdAt = new Date(existing.created_at).getTime();
-            const updatedAt = new Date(existing.updated_at).getTime();
-            if (updatedAt - createdAt < 1000) {
-              inserted++;
-            } else {
-              updated++;
-            }
+          if (error) {
+            console.error(`Error updating card ${card.id}:`, error);
+            errors.push(`${card.name}: ${error.message}`);
+          } else {
+            updated++;
+          }
+        } else {
+          // Insert new card
+          const { error } = await supabase
+            .from('tcg_cards_cache')
+            .insert(cardData);
+
+          if (error) {
+            console.error(`Error inserting card ${card.id}:`, error);
+            errors.push(`${card.name}: ${error.message}`);
+          } else {
+            inserted++;
           }
         }
       } catch (err) {

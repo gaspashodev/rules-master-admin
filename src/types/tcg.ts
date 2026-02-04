@@ -61,7 +61,7 @@ export interface TcgCardsFilters {
   types?: string[];
   page?: number;
   pageSize?: number;
-  sortBy?: 'name' | 'release_date' | 'hp' | 'created_at';
+  sortBy?: 'name' | 'release_date' | 'created_at';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -139,6 +139,7 @@ export interface FetchLorcanaCardsResult {
   total: number;
   inserted: number;
   updated: number;
+  skipped: number;
   errors: string[];
 }
 
