@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, isLoading, isAdmin } = useAuth();
+  const { user, isLoading, canAccessBackoffice } = useAuth();
 
   if (isLoading) {
     return (
@@ -24,7 +24,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!isAdmin) {
+  if (!canAccessBackoffice) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4 text-center p-8">

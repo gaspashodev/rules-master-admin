@@ -9,33 +9,33 @@ import { Loader2, Gamepad2 } from 'lucide-react';
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { user, isAdmin, isLoading: authLoading, signIn } = useAuth();
+  const { user, canAccessBackoffice, isLoading: authLoading, signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Redirect if already logged in as admin
+  // Redirect if already logged in with backoffice access
   useEffect(() => {
-    if (!authLoading && user && isAdmin) {
+    if (!authLoading && user && canAccessBackoffice) {
       navigate('/');
     }
-  }, [user, isAdmin, authLoading, navigate]);
+  }, [user, canAccessBackoffice, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    const { error, isAdmin } = await signIn(email, password);
+    const { error, canAccessBackoffice } = await signIn(email, password);
 
     if (error) {
       setError(error.message || 'Email ou mot de passe incorrect');
       setIsLoading(false);
-    } else if (isAdmin) {
+    } else if (canAccessBackoffice) {
       navigate('/');
     } else {
-      setError('Accès réservé aux administrateurs');
+      setError('Accès réservé aux administrateurs et modérateurs');
       setIsLoading(false);
     }
   };

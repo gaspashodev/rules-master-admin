@@ -1,13 +1,17 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
+import type { UserRole } from '@/types/database';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
+  role: UserRole;
   isAdmin: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null; isAdmin: boolean }>;
+  isModerator: boolean;
+  canAccessBackoffice: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null; canAccessBackoffice: boolean }>;
   signOut: () => Promise<void>;
 }
 
@@ -17,22 +21,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<UserRole>('user');
 
-  const checkAdmin = async (userId: string): Promise<boolean> => {
+  const isAdmin = role === 'admin';
+  const isModerator = role === 'moderator';
+  const canAccessBackoffice = isAdmin || isModerator;
+
+  const checkRole = async (userId: string): Promise<UserRole> => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('is_admin')
+        .select('role')
         .eq('id', userId)
         .maybeSingle();
 
       if (error) {
-        return false;
+        return 'user';
       }
-      return data?.is_admin === true;
+      return data?.role || 'user';
     } catch {
-      return false;
+      return 'user';
     }
   };
 
@@ -49,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) {
           setSession(null);
           setUser(null);
-          setIsAdmin(false);
+          setRole('user');
           setIsLoading(false);
           return;
         }
@@ -57,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!session) {
           setSession(null);
           setUser(null);
-          setIsAdmin(false);
+          setRole('user');
           setIsLoading(false);
           return;
         }
@@ -66,8 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session.user);
 
-        const adminStatus = await checkAdmin(session.user.id);
-        setIsAdmin(adminStatus);
+        const userRole = await checkRole(session.user.id);
+        setRole(userRole);
         setIsLoading(false);
 
       } catch {
@@ -83,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
-          setIsAdmin(false);
+          setRole('user');
         }
 
         // Pour les autres événements, on met juste à jour la session
@@ -107,38 +115,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (error) {
-      return { error: error as Error, isAdmin: false };
+      return { error: error as Error, canAccessBackoffice: false };
     }
 
     if (data.user) {
-      const adminStatus = await checkAdmin(data.user.id);
+      const userRole = await checkRole(data.user.id);
 
-      if (!adminStatus) {
+      if (userRole === 'user') {
         await supabase.auth.signOut();
         return {
-          error: new Error('Accès réservé aux administrateurs'),
-          isAdmin: false
+          error: new Error('Accès réservé aux administrateurs et modérateurs'),
+          canAccessBackoffice: false
         };
       }
 
       setUser(data.user);
       setSession(data.session);
-      setIsAdmin(true);
-      return { error: null, isAdmin: true };
+      setRole(userRole);
+      return { error: null, canAccessBackoffice: true };
     }
 
-    return { error: new Error('Erreur de connexion'), isAdmin: false };
+    return { error: new Error('Erreur de connexion'), canAccessBackoffice: false };
   };
 
   const signOut = async () => {
-    setIsAdmin(false);
+    setRole('user');
     setUser(null);
     setSession(null);
     await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, isLoading, isAdmin, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, isLoading, role, isAdmin, isModerator, canAccessBackoffice, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

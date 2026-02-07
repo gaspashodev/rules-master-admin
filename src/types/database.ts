@@ -1,5 +1,7 @@
 // Types basés sur le schéma Supabase
 
+export type UserRole = 'user' | 'moderator' | 'admin';
+
 export interface Game {
   id: string;
   slug: string;
