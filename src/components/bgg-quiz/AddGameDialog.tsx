@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { ExternalLink, X } from 'lucide-react';
 import {
   useCreateBggGame,
@@ -47,6 +48,7 @@ export function AddGameDialog({
   const [maxPlayers, setMaxPlayers] = useState('');
   const [minPlaytime, setMinPlaytime] = useState('');
   const [maxPlaytime, setMaxPlaytime] = useState('');
+  const [quizEnabled, setQuizEnabled] = useState(true);
 
   const createGame = useCreateBggGame();
 
@@ -87,6 +89,7 @@ export function AddGameDialog({
       max_players: maxPlayers ? parseInt(maxPlayers) : null,
       min_playtime: minPlaytime ? parseInt(minPlaytime) : null,
       max_playtime: maxPlaytime ? parseInt(maxPlaytime) : null,
+      quiz_enabled: quizEnabled,
     };
 
     try {
@@ -114,6 +117,7 @@ export function AddGameDialog({
     setMaxPlayers('');
     setMinPlaytime('');
     setMaxPlaytime('');
+    setQuizEnabled(true);
   };
 
   const handleClose = () => {
@@ -372,6 +376,19 @@ export function AddGameDialog({
                 rows={3}
               />
             </div>
+          </div>
+          {/* Quiz enabled */}
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label>Inclure dans les quiz</Label>
+              <p className="text-sm text-muted-foreground">
+                Ce jeu apparaîtra dans les quiz en front
+              </p>
+            </div>
+            <Switch
+              checked={quizEnabled}
+              onCheckedChange={setQuizEnabled}
+            />
           </div>
         </div>
 

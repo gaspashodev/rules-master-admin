@@ -88,6 +88,7 @@ export interface BggGameCacheFull {
   max_players: number | null;
   min_playtime: number | null;
   max_playtime: number | null;
+  quiz_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -318,6 +319,7 @@ export interface BggGameCacheInsert {
   max_players?: number | null;
   min_playtime?: number | null;
   max_playtime?: number | null;
+  quiz_enabled?: boolean;
 }
 
 export function useCreateBggGame() {

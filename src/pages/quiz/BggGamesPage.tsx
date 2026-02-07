@@ -22,6 +22,7 @@ import {
   type BggGameCacheFull,
   type BggGameCacheInsert,
 } from '@/hooks/useBggQuiz';
+import { Switch } from '@/components/ui/switch';
 import { Search, Edit2, Trash2, ExternalLink, ChevronLeft, ChevronRight, RefreshCw, Plus, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -396,6 +397,7 @@ function EditGameDialog({
     max_players: game.max_players || '',
     min_playtime: game.min_playtime || '',
     max_playtime: game.max_playtime || '',
+    quiz_enabled: game.quiz_enabled ?? true,
   });
 
   const regenerateDescription = useRegenerateDescription();
@@ -445,6 +447,7 @@ function EditGameDialog({
       max_players: formData.max_players ? Number(formData.max_players) : null,
       min_playtime: formData.min_playtime ? Number(formData.min_playtime) : null,
       max_playtime: formData.max_playtime ? Number(formData.max_playtime) : null,
+      quiz_enabled: formData.quiz_enabled,
     };
 
     await onSave(data);
@@ -585,6 +588,20 @@ function EditGameDialog({
                 onChange={(e) => setFormData(f => ({ ...f, max_playtime: e.target.value }))}
               />
             </div>
+          </div>
+
+          {/* Quiz enabled */}
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label>Inclure dans les quiz</Label>
+              <p className="text-sm text-muted-foreground">
+                Ce jeu apparaîtra dans les quiz en front
+              </p>
+            </div>
+            <Switch
+              checked={formData.quiz_enabled}
+              onCheckedChange={(checked) => setFormData(f => ({ ...f, quiz_enabled: checked }))}
+            />
           </div>
 
           {/* Descriptions */}
