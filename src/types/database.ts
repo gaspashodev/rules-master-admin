@@ -24,12 +24,6 @@ export interface Game {
   updated_at: string;
 }
 
-export interface GameWithStats extends Game {
-  concept_count: number;
-  quiz_count: number;
-  video_count: number;
-}
-
 export interface Concept {
   id: string;
   game_id: string;
@@ -254,42 +248,6 @@ export interface GameRuleFormData {
   pdf_url: string;
   language: string;
   order_index: number;
-}
-
-// ============ GAME BARCODES ============
-
-export interface GameBarcode {
-  id: string;
-  game_id: string;
-  barcode: string;
-  edition: string | null;
-  created_at: string;
-}
-
-export interface GameBarcodeFormData {
-  barcode: string;
-  edition: string | null;
-}
-
-// ============ ANALYTICS ============
-
-export interface ScanAnalytics {
-  barcode: string;
-  game_id: string | null;
-  game_name: string | null;
-  scan_count: number;
-  unique_users: number;
-  first_scanned: string;
-  last_scanned: string;
-  game_exists: boolean;
-}
-
-export interface MissingGameDemand {
-  barcode: string;
-  request_count: number;
-  unique_users: number;
-  first_requested: string;
-  last_requested: string;
 }
 
 // ============ ERROR REPORTS ============

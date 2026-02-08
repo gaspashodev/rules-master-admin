@@ -1,14 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { Game, GameWithStats, GameFormData } from '@/types/database';
+import type { Game, GameFormData } from '@/types/database';
 import { toast } from 'sonner';
 
 export function useGames() {
   return useQuery({
     queryKey: ['games'],
-    queryFn: async (): Promise<GameWithStats[]> => {
+    queryFn: async (): Promise<Game[]> => {
       const { data, error } = await supabase
-        .from('games_with_stats')
+        .from('games')
         .select('*')
         .order('order_index', { ascending: true });
 

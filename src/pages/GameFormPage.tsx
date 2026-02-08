@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { BarcodesEditor } from '@/components/games/BarcodesEditor';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -149,7 +148,6 @@ export function GameFormPage() {
             <TabsTrigger value="info">Informations</TabsTrigger>
             <TabsTrigger value="concepts">Concepts</TabsTrigger>
             <TabsTrigger value="resources">Ressources</TabsTrigger>
-            <TabsTrigger value="barcodes">Codes-barres</TabsTrigger>
           </TabsList>
           <TabsContent value="info">
             <FormFields
@@ -171,9 +169,6 @@ export function GameFormPage() {
           </TabsContent>
           <TabsContent value="resources">
             <ResourcesEditor gameId={id!} />
-          </TabsContent>
-          <TabsContent value="barcodes">
-            <BarcodesEditor gameId={id!} />
           </TabsContent>
         </Tabs>
       ) : (

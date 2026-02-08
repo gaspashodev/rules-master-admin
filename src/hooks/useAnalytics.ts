@@ -1,46 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { 
-  ScanAnalytics, 
-  MissingGameDemand, 
+import type {
   ErrorReport,
-  ReportStatus 
+  ReportStatus
 } from '@/types/database';
 import { toast } from 'sonner';
-
-// ============ SCAN ANALYTICS ============
-
-export function useScanAnalytics() {
-  return useQuery({
-    queryKey: ['analytics', 'scans'],
-    queryFn: async (): Promise<ScanAnalytics[]> => {
-      const { data, error } = await supabase
-        .from('scan_analytics')
-        .select('*')
-        .order('scan_count', { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    },
-  });
-}
-
-// ============ MISSING GAMES DEMAND ============
-
-export function useMissingGamesDemand() {
-  return useQuery({
-    queryKey: ['analytics', 'missing-games'],
-    queryFn: async (): Promise<MissingGameDemand[]> => {
-      const { data, error } = await supabase
-        .from('missing_games_demand')
-        .select('*')
-        .order('request_count', { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    },
-  });
-}
 
 // ============ ERROR REPORTS ============
 

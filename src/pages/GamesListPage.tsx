@@ -170,8 +170,6 @@ export function GamesListPage() {
                 {/* Stats */}
                 <div className="flex items-center gap-2 mb-4">
                   {getDifficultyBadge(game.difficulty)}
-                  <Badge variant="outline">{game.concept_count || 0} concepts</Badge>
-                  <Badge variant="outline">{game.quiz_count || 0} quiz</Badge>
                 </div>
 
                 {/* Toggles */}

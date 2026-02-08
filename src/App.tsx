@@ -7,7 +7,6 @@ import { DashboardPage } from './pages/DashboardPage';
 import { GamesListPage } from './pages/GamesListPage';
 import { GameFormPage } from './pages/GameFormPage';
 import { ConceptFormPage } from './pages/ConceptFormPage';
-import AnalyticsPage from './pages/AnalyticsPage';
 import ErrorReportsPage from './pages/ErrorReportsPage';
 import { FlaggedQuestionsPage } from './pages/quiz/FlaggedQuestionsPage';
 import { BggQuestionsPage } from './pages/quiz/BggQuestionsPage';
@@ -41,7 +40,6 @@ function App() {
           <Route path="/concepts/:id" element={<ConceptFormPage />} />
           <Route path="/concepts" element={<PlaceholderPage title="Concepts" />} />
           <Route path="/quizzes" element={<PlaceholderPage title="Quiz" />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/reports" element={<ErrorReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           {/* Quiz BGG routes */}
