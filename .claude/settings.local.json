@@ -14,7 +14,8 @@
       "WebFetch(domain:docs.pokemontcg.io)",
       "WebFetch(domain:api.pokemontcg.io)",
       "Bash(npx tsc:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(del:*)"
     ]
   }
 }

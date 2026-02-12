@@ -73,7 +73,7 @@ export function BggGamesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Jeux BGG</h1>
+          <h1 className="text-2xl font-bold">Liste des jeux</h1>
           <p className="text-muted-foreground">
             {data?.count || 0} jeux enregistrés dans la base
           </p>

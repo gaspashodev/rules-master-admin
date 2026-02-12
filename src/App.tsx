@@ -4,19 +4,11 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Layout } from '@/components/layout/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
-import { GamesListPage } from './pages/GamesListPage';
-import { GameFormPage } from './pages/GameFormPage';
-import { ConceptFormPage } from './pages/ConceptFormPage';
-import ErrorReportsPage from './pages/ErrorReportsPage';
 import { FlaggedQuestionsPage } from './pages/quiz/FlaggedQuestionsPage';
 import { BggQuestionsPage } from './pages/quiz/BggQuestionsPage';
 import { BggQuestionFormPage } from './pages/quiz/BggQuestionFormPage';
 import { AwardsPage } from './pages/quiz/AwardsPage';
 import { BggGamesPage } from './pages/quiz/BggGamesPage';
-import { PokemonCardsPage } from './pages/tcg/PokemonCardsPage';
-import { YugiohCardsPage } from './pages/tcg/YugiohCardsPage';
-import { LorcanaCardsPage } from './pages/tcg/LorcanaCardsPage';
-import { MagicCardsPage } from './pages/tcg/MagicCardsPage';
 
 function App() {
   return (
@@ -34,13 +26,6 @@ function App() {
           }
         >
           <Route path="/" element={<DashboardPage />} />
-          <Route path="/games" element={<GamesListPage />} />
-          <Route path="/games/new" element={<GameFormPage />} />
-          <Route path="/games/:id" element={<GameFormPage />} />
-          <Route path="/concepts/:id" element={<ConceptFormPage />} />
-          <Route path="/concepts" element={<PlaceholderPage title="Concepts" />} />
-          <Route path="/quizzes" element={<PlaceholderPage title="Quiz" />} />
-          <Route path="/reports" element={<ErrorReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           {/* Quiz BGG routes */}
           <Route path="/quiz/games" element={<BggGamesPage />} />
@@ -49,27 +34,9 @@ function App() {
           <Route path="/quiz/questions/new" element={<BggQuestionFormPage />} />
           <Route path="/quiz/questions/:id" element={<BggQuestionFormPage />} />
           <Route path="/quiz/awards" element={<AwardsPage />} />
-          {/* TCG routes */}
-          <Route path="/tcg/pokemon" element={<PokemonCardsPage />} />
-          <Route path="/tcg/yugioh" element={<YugiohCardsPage />} />
-          <Route path="/tcg/lorcana" element={<LorcanaCardsPage />} />
-          <Route path="/tcg/magic" element={<MagicCardsPage />} />
         </Route>
       </Routes>
     </AuthProvider>
-  );
-}
-
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
-      <div className="rounded-lg border border-dashed p-8 text-center">
-        <p className="text-muted-foreground">
-          Accédez à cette section depuis la page d'un jeu
-        </p>
-      </div>
-    </div>
   );
 }
 
