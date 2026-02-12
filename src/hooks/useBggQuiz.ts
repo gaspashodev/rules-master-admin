@@ -89,6 +89,8 @@ export interface BggGameCacheFull {
   min_playtime: number | null;
   max_playtime: number | null;
   quiz_enabled: boolean;
+  crown_enabled: boolean;
+  crown_modes: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -99,6 +101,7 @@ export interface BggGamesFilters {
   pageSize?: number;
   sortBy?: 'name' | 'created_at' | 'rating' | 'rank';
   sortOrder?: 'asc' | 'desc';
+  crownOnly?: boolean;
 }
 
 export function useBggGames(filters?: BggGamesFilters) {
@@ -107,9 +110,10 @@ export function useBggGames(filters?: BggGamesFilters) {
   const search = filters?.search || '';
   const sortBy = filters?.sortBy || 'name';
   const sortOrder = filters?.sortOrder || 'asc';
+  const crownOnly = filters?.crownOnly || false;
 
   return useQuery({
-    queryKey: ['bgg-games-cache', 'list', { page, pageSize, search, sortBy, sortOrder }],
+    queryKey: ['bgg-games-cache', 'list', { page, pageSize, search, sortBy, sortOrder, crownOnly }],
     queryFn: async (): Promise<{ data: BggGameCacheFull[]; count: number }> => {
       let query = supabase
         .from('bgg_games_cache')
@@ -117,6 +121,10 @@ export function useBggGames(filters?: BggGamesFilters) {
 
       if (search && search.length >= 2) {
         query = query.or(`name.ilike.%${search}%,name_fr.ilike.%${search}%`);
+      }
+
+      if (crownOnly) {
+        query = query.eq('crown_enabled', true);
       }
 
       query = query
@@ -320,6 +328,8 @@ export interface BggGameCacheInsert {
   min_playtime?: number | null;
   max_playtime?: number | null;
   quiz_enabled?: boolean;
+  crown_enabled?: boolean;
+  crown_modes?: string[] | null;
 }
 
 export function useCreateBggGame() {

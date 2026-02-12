@@ -49,6 +49,8 @@ export function AddGameDialog({
   const [minPlaytime, setMinPlaytime] = useState('');
   const [maxPlaytime, setMaxPlaytime] = useState('');
   const [quizEnabled, setQuizEnabled] = useState(true);
+  const [crownEnabled, setCrownEnabled] = useState(false);
+  const [crownModes, setCrownModes] = useState<string[]>([]);
 
   const createGame = useCreateBggGame();
 
@@ -90,6 +92,8 @@ export function AddGameDialog({
       min_playtime: minPlaytime ? parseInt(minPlaytime) : null,
       max_playtime: maxPlaytime ? parseInt(maxPlaytime) : null,
       quiz_enabled: quizEnabled,
+      crown_enabled: crownEnabled,
+      crown_modes: crownEnabled && crownModes.length > 0 ? crownModes : null,
     };
 
     try {
@@ -118,6 +122,8 @@ export function AddGameDialog({
     setMinPlaytime('');
     setMaxPlaytime('');
     setQuizEnabled(true);
+    setCrownEnabled(false);
+    setCrownModes([]);
   };
 
   const handleClose = () => {
@@ -389,6 +395,50 @@ export function AddGameDialog({
               checked={quizEnabled}
               onCheckedChange={setQuizEnabled}
             />
+          </div>
+
+          {/* Crown enabled */}
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Inclure dans la Couronne</Label>
+                <p className="text-sm text-muted-foreground">
+                  Ce jeu sera disponible dans le mode Couronne
+                </p>
+              </div>
+              <Switch
+                checked={crownEnabled}
+                onCheckedChange={(checked) => { setCrownEnabled(checked); if (!checked) setCrownModes([]); }}
+              />
+            </div>
+            {crownEnabled && (
+              <div className="space-y-2 pt-2 border-t">
+                <Label className="text-sm">Modes de jeu disponibles</Label>
+                <div className="flex gap-4">
+                  {(['1v1', 'ffa', 'teams'] as const).map((mode) => {
+                    const labels: Record<string, string> = { '1v1': '1V1', 'ffa': 'FFA', 'teams': 'Équipes' };
+                    const isChecked = crownModes.includes(mode);
+                    return (
+                      <label key={mode} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            setCrownModes(prev =>
+                              e.target.checked
+                                ? [...prev, mode]
+                                : prev.filter(m => m !== mode)
+                            );
+                          }}
+                          className="rounded border-input"
+                        />
+                        <span className="text-sm">{labels[mode]}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

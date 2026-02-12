@@ -23,7 +23,8 @@ import {
   type BggGameCacheInsert,
 } from '@/hooks/useBggQuiz';
 import { Switch } from '@/components/ui/switch';
-import { Search, Edit2, Trash2, ExternalLink, ChevronLeft, ChevronRight, RefreshCw, Plus, Loader2, Sparkles } from 'lucide-react';
+import { Pagination } from '@/components/ui/pagination';
+import { Search, Edit2, Trash2, ExternalLink, RefreshCw, Plus, Loader2, Sparkles, HelpCircle, Crown, Swords, Users, UsersRound } from 'lucide-react';
 import { toast } from 'sonner';
 
 type SortOption = 'name-asc' | 'created_at-desc' | 'rating-desc' | 'rank-asc';
@@ -35,12 +36,13 @@ export function BggGamesPage() {
   const [sortOption, setSortOption] = useState<SortOption>('created_at-desc');
   const [editingGame, setEditingGame] = useState<BggGameCacheFull | null>(null);
   const [showAddByIdDialog, setShowAddByIdDialog] = useState(false);
+  const [crownOnly, setCrownOnly] = useState(false);
 
   // Parse sort option
   const [sortBy, sortOrder] = sortOption.split('-') as ['name' | 'created_at' | 'rating' | 'rank', 'asc' | 'desc'];
 
   const pageSize = 50;
-  const { data, isLoading } = useBggGames({ search: debouncedSearch, page, pageSize, sortBy, sortOrder });
+  const { data, isLoading } = useBggGames({ search: debouncedSearch, page, pageSize, sortBy, sortOrder, crownOnly });
   const updateGame = useUpdateBggGame();
   const deleteGame = useDeleteBggGame();
   const fetchBggData = useFetchBggData();
@@ -111,6 +113,15 @@ export function BggGamesPage() {
                 className="pl-10"
               />
             </div>
+            <Button
+              variant={crownOnly ? 'default' : 'outline'}
+              onClick={() => { setCrownOnly(!crownOnly); setPage(0); }}
+              title="Filtrer les jeux éligibles à la Couronne"
+              className="gap-2"
+            >
+              <Crown className="h-4 w-4" />
+              Couronne
+            </Button>
             <Select value={sortOption} onValueChange={(v) => { setSortOption(v as SortOption); setPage(0); }}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue placeholder="Trier par..." />
@@ -133,33 +144,9 @@ export function BggGamesPage() {
         </CardHeader>
         <CardContent>
           {/* Pagination top */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mb-4 pb-4 border-b">
-              <p className="text-sm text-muted-foreground">
-                Page {page + 1} sur {totalPages}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Précédent
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                >
-                  Suivant
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <div className="mb-4 pb-4 border-b">
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
 
           {isLoading ? (
             <div className="space-y-2">
@@ -208,6 +195,31 @@ export function BggGamesPage() {
                     </div>
                   </div>
 
+                  {/* Status icons */}
+                  <div className="flex items-center gap-1.5">
+                    <HelpCircle
+                      className={`h-4 w-4 ${game.quiz_enabled ? 'text-blue-500' : 'text-muted-foreground/30'}`}
+                      title={game.quiz_enabled ? 'Quiz activé' : 'Quiz désactivé'}
+                    />
+                    <Crown
+                      className={`h-4 w-4 ${game.crown_enabled ? 'text-yellow-500' : 'text-muted-foreground/30'}`}
+                      title={game.crown_enabled ? 'Couronne activée' : 'Couronne désactivée'}
+                    />
+                    {game.crown_enabled && game.crown_modes && game.crown_modes.length > 0 && (
+                      <div className="flex items-center gap-0.5 ml-0.5">
+                        {game.crown_modes.includes('1v1') && (
+                          <Swords className="h-3.5 w-3.5 text-yellow-500/70" title="1V1" />
+                        )}
+                        {game.crown_modes.includes('ffa') && (
+                          <UsersRound className="h-3.5 w-3.5 text-yellow-500/70" title="FFA" />
+                        )}
+                        {game.crown_modes.includes('teams') && (
+                          <Users className="h-3.5 w-3.5 text-yellow-500/70" title="Équipes" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Actions */}
                   <div className="flex items-center gap-2">
                     <Button
@@ -242,33 +254,9 @@ export function BggGamesPage() {
           )}
 
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 pt-4 border-t">
-              <p className="text-sm text-muted-foreground">
-                Page {page + 1} sur {totalPages}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Précédent
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                >
-                  Suivant
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <div className="mt-4 pt-4 border-t">
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
         </CardContent>
       </Card>
 
@@ -398,6 +386,8 @@ function EditGameDialog({
     min_playtime: game.min_playtime || '',
     max_playtime: game.max_playtime || '',
     quiz_enabled: game.quiz_enabled ?? true,
+    crown_enabled: game.crown_enabled ?? false,
+    crown_modes: game.crown_modes ?? [],
   });
 
   const regenerateDescription = useRegenerateDescription();
@@ -448,6 +438,8 @@ function EditGameDialog({
       min_playtime: formData.min_playtime ? Number(formData.min_playtime) : null,
       max_playtime: formData.max_playtime ? Number(formData.max_playtime) : null,
       quiz_enabled: formData.quiz_enabled,
+      crown_enabled: formData.crown_enabled,
+      crown_modes: formData.crown_enabled && formData.crown_modes.length > 0 ? formData.crown_modes : null,
     };
 
     await onSave(data);
@@ -602,6 +594,51 @@ function EditGameDialog({
               checked={formData.quiz_enabled}
               onCheckedChange={(checked) => setFormData(f => ({ ...f, quiz_enabled: checked }))}
             />
+          </div>
+
+          {/* Crown enabled */}
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Inclure dans la Couronne</Label>
+                <p className="text-sm text-muted-foreground">
+                  Ce jeu sera disponible dans le mode Couronne
+                </p>
+              </div>
+              <Switch
+                checked={formData.crown_enabled}
+                onCheckedChange={(checked) => setFormData(f => ({ ...f, crown_enabled: checked, crown_modes: checked ? f.crown_modes : [] }))}
+              />
+            </div>
+            {formData.crown_enabled && (
+              <div className="space-y-2 pt-2 border-t">
+                <Label className="text-sm">Modes de jeu disponibles</Label>
+                <div className="flex gap-4">
+                  {(['1v1', 'ffa', 'teams'] as const).map((mode) => {
+                    const labels: Record<string, string> = { '1v1': '1V1', 'ffa': 'FFA', 'teams': 'Équipes' };
+                    const isChecked = formData.crown_modes.includes(mode);
+                    return (
+                      <label key={mode} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            setFormData(f => ({
+                              ...f,
+                              crown_modes: e.target.checked
+                                ? [...f.crown_modes, mode]
+                                : f.crown_modes.filter(m => m !== mode),
+                            }));
+                          }}
+                          className="rounded border-input"
+                        />
+                        <span className="text-sm">{labels[mode]}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Descriptions */}

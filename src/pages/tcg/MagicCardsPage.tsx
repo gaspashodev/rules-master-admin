@@ -22,7 +22,8 @@ import {
   useTcgSetsFromDb,
 } from '@/hooks/useTcgCards';
 import type { TcgCard } from '@/types/tcg';
-import { Search, Trash2, ExternalLink, ChevronLeft, ChevronRight, Download, Loader2, Image, Check } from 'lucide-react';
+import { Search, Trash2, ExternalLink, Download, Loader2, Image, Check } from 'lucide-react';
+import { Pagination } from '@/components/ui/pagination';
 
 type SortOption = 'name-asc' | 'release_date-desc' | 'created_at-desc';
 
@@ -125,33 +126,9 @@ export function MagicCardsPage() {
           <CardTitle>Liste des cartes</CardTitle>
         </CardHeader>
         <CardContent>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mb-4 pb-4 border-b">
-              <p className="text-sm text-muted-foreground">
-                Page {page + 1} sur {totalPages}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Précédent
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                >
-                  Suivant
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <div className="mb-4 pb-4 border-b">
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
 
           {isLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -212,33 +189,9 @@ export function MagicCardsPage() {
             </div>
           )}
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 pt-4 border-t">
-              <p className="text-sm text-muted-foreground">
-                Page {page + 1} sur {totalPages}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Précédent
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                >
-                  Suivant
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <div className="mt-4 pt-4 border-t">
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
         </CardContent>
       </Card>
 
