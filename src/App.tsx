@@ -9,6 +9,9 @@ import { BggQuestionsPage } from './pages/quiz/BggQuestionsPage';
 import { BggQuestionFormPage } from './pages/quiz/BggQuestionFormPage';
 import { AwardsPage } from './pages/quiz/AwardsPage';
 import { BggGamesPage } from './pages/quiz/BggGamesPage';
+import { EventsPage } from './pages/events/EventsPage';
+import { CompetitiveMatchesPage } from './pages/competitive/CompetitiveMatchesPage';
+import { CitiesSeasonsPage } from './pages/competitive/CitiesSeasonsPage';
 
 function App() {
   return (
@@ -34,6 +37,11 @@ function App() {
           <Route path="/quiz/questions/new" element={<BggQuestionFormPage />} />
           <Route path="/quiz/questions/:id" element={<BggQuestionFormPage />} />
           <Route path="/quiz/awards" element={<AwardsPage />} />
+          {/* Events routes */}
+          <Route path="/events" element={<EventsPage />} />
+          {/* Competitive routes */}
+          <Route path="/competitive/matches" element={<CompetitiveMatchesPage />} />
+          <Route path="/competitive/cities-seasons" element={<CitiesSeasonsPage />} />
         </Route>
       </Routes>
     </AuthProvider>

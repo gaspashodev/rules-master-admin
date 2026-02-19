@@ -7,6 +7,9 @@ import {
   ListTodo,
   Trophy,
   Dices,
+  CalendarDays,
+  Swords,
+  MapPin,
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
@@ -19,6 +22,15 @@ const quizNavigation = [
   { name: 'Toutes les questions', href: '/quiz/questions', icon: ListTodo },
   { name: 'Prix & Récompenses', href: '/quiz/awards', icon: Trophy },
   { name: 'Questions signalées', href: '/quiz/flagged', icon: Flag },
+];
+
+const eventsNavigation = [
+  { name: 'Événements', href: '/events', icon: CalendarDays },
+];
+
+const competitiveNavigation = [
+  { name: 'Matchs compétitifs', href: '/competitive/matches', icon: Swords },
+  { name: 'Villes & Saisons', href: '/competitive/cities-seasons', icon: MapPin },
 ];
 
 const secondaryNavigation = [
@@ -73,6 +85,58 @@ export function Sidebar() {
           Quiz BGG
         </p>
         {quizNavigation.map((item) => {
+          const isActive =
+            location.pathname === item.href ||
+            (item.href !== '/' && location.pathname.startsWith(item.href));
+          return (
+            <Link
+              key={item.name}
+              to={item.href}
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              )}
+            >
+              <item.icon className="h-5 w-5" />
+              {item.name}
+            </Link>
+          );
+        })}
+
+        <Separator className="my-4" />
+
+        <p className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          Événements
+        </p>
+        {eventsNavigation.map((item) => {
+          const isActive =
+            location.pathname === item.href ||
+            (item.href !== '/' && location.pathname.startsWith(item.href));
+          return (
+            <Link
+              key={item.name}
+              to={item.href}
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              )}
+            >
+              <item.icon className="h-5 w-5" />
+              {item.name}
+            </Link>
+          );
+        })}
+
+        <Separator className="my-4" />
+
+        <p className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          La Couronne
+        </p>
+        {competitiveNavigation.map((item) => {
           const isActive =
             location.pathname === item.href ||
             (item.href !== '/' && location.pathname.startsWith(item.href));
