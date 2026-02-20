@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, Search, Eye, Crown, Users } from 'lucide-react';
+import { CalendarDays, Search, Eye, Crown, Users, MessageCircle, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Pagination } from '@/components/ui/pagination';
-import { useEvents, useEventParticipants } from '@/hooks/useEvents';
+import { useEvents, useEventParticipants, useEventMessages } from '@/hooks/useEvents';
 import { PARTICIPANT_STATUS_CONFIG } from '@/types/events';
 import type { Event } from '@/types/events';
 
@@ -27,6 +27,7 @@ export function EventsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [activeTab, setActiveTab] = useState<'details' | 'discussion'>('details');
 
   const { data, isLoading } = useEvents({
     search: debouncedSearch,
@@ -36,7 +37,17 @@ export function EventsPage() {
     dateTo: dateTo || undefined,
   });
 
-  const { data: participants } = useEventParticipants(selectedEvent?.id);
+  const {
+    data: participants,
+    isLoading: participantsLoading,
+    isError: participantsError,
+  } = useEventParticipants(selectedEvent?.id);
+
+  const {
+    data: messages,
+    isLoading: messagesLoading,
+    isError: messagesError,
+  } = useEventMessages(selectedEvent?.id);
 
   const totalPages = Math.ceil((data?.count || 0) / PAGE_SIZE);
 
@@ -46,6 +57,11 @@ export function EventsPage() {
     setTimeout(() => {
       setDebouncedSearch(value);
     }, 300);
+  };
+
+  const handleOpenEvent = (event: Event) => {
+    setSelectedEvent(event);
+    setActiveTab('details');
   };
 
   return (
@@ -111,7 +127,7 @@ export function EventsPage() {
                 <div
                   key={event.id}
                   className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
-                  onClick={() => setSelectedEvent(event)}
+                  onClick={() => handleOpenEvent(event)}
                 >
                   {event.game?.image_url && (
                     <img
@@ -141,7 +157,7 @@ export function EventsPage() {
                       </span>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedEvent(event); }}>
+                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleOpenEvent(event); }}>
                     <Eye className="h-4 w-4" />
                   </Button>
                 </div>
@@ -163,68 +179,143 @@ export function EventsPage() {
           </DialogHeader>
           {selectedEvent && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground">Organisateur</Label>
-                  <p className="font-medium">{selectedEvent.organiser?.username || 'Inconnu'}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Ville</Label>
-                  <p className="font-medium">{selectedEvent.city || 'Non spécifié'}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Date</Label>
-                  <p className="font-medium">
-                    {new Date(selectedEvent.starts_at).toLocaleDateString('fr-FR', {
-                      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-                      hour: '2-digit', minute: '2-digit',
-                    })}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Statut</Label>
-                  <p className="font-medium">{selectedEvent.status}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Jeu</Label>
-                  <p className="font-medium">{selectedEvent.game ? (selectedEvent.game.name_fr || selectedEvent.game.name) : 'Aucun'}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Places</Label>
-                  <p className="font-medium">
-                    {selectedEvent.spots_available !== null && selectedEvent.max_players
-                      ? `${selectedEvent.max_players - selectedEvent.spots_available} / ${selectedEvent.max_players}`
-                      : 'Non limité'}
-                  </p>
-                </div>
+              {/* Tabs */}
+              <div className="flex gap-2 border-b pb-2">
+                <Button
+                  variant={activeTab === 'details' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveTab('details')}
+                  className="gap-2"
+                >
+                  <Users className="h-4 w-4" />
+                  Détails & Participants
+                </Button>
+                <Button
+                  variant={activeTab === 'discussion' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveTab('discussion')}
+                  className="gap-2"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Discussion
+                  {messages && messages.length > 0 && (
+                    <Badge variant="secondary" className="ml-1">{messages.length}</Badge>
+                  )}
+                </Button>
               </div>
 
-              {selectedEvent.is_competitive && (
-                <Badge variant="warning" className="gap-1">
-                  <Crown className="h-3 w-3" />
-                  Événement compétitif (La Couronne)
-                </Badge>
+              {activeTab === 'details' && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-muted-foreground">Organisateur</Label>
+                      <p className="font-medium">{selectedEvent.organiser?.username || 'Inconnu'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Ville</Label>
+                      <p className="font-medium">{selectedEvent.city || 'Non spécifié'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Date</Label>
+                      <p className="font-medium">
+                        {new Date(selectedEvent.starts_at).toLocaleDateString('fr-FR', {
+                          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Statut</Label>
+                      <p className="font-medium">{selectedEvent.status}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Jeu</Label>
+                      <p className="font-medium">{selectedEvent.game ? (selectedEvent.game.name_fr || selectedEvent.game.name) : 'Aucun'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Places</Label>
+                      <p className="font-medium">
+                        {selectedEvent.spots_available !== null && selectedEvent.max_players
+                          ? `${selectedEvent.max_players - selectedEvent.spots_available} / ${selectedEvent.max_players}`
+                          : 'Non limité'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {selectedEvent.is_competitive && (
+                    <Badge variant="warning" className="gap-1">
+                      <Crown className="h-3 w-3" />
+                      Événement compétitif (La Couronne)
+                    </Badge>
+                  )}
+
+                  <Separator />
+
+                  <div>
+                    <h3 className="font-semibold mb-3">Participants ({participants?.length || 0})</h3>
+                    {participantsLoading ? (
+                      <div className="flex items-center gap-2 text-muted-foreground text-sm py-4">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Chargement des participants...
+                      </div>
+                    ) : participantsError ? (
+                      <p className="text-destructive text-sm py-2">Erreur lors du chargement des participants</p>
+                    ) : !participants?.length ? (
+                      <p className="text-muted-foreground text-sm">Aucun participant</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {participants.map(p => (
+                          <div key={p.id} className="flex items-center justify-between p-2 rounded border">
+                            <span className="text-sm">{p.profile?.username || 'Utilisateur inconnu'}</span>
+                            <Badge variant={PARTICIPANT_STATUS_CONFIG[p.status]?.variant || 'outline'}>
+                              {PARTICIPANT_STATUS_CONFIG[p.status]?.label || p.status}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
 
-              <Separator />
-
-              <div>
-                <h3 className="font-semibold mb-3">Participants ({participants?.length || 0})</h3>
-                {!participants?.length ? (
-                  <p className="text-muted-foreground text-sm">Aucun participant</p>
-                ) : (
-                  <div className="space-y-1">
-                    {participants.map(p => (
-                      <div key={p.id} className="flex items-center justify-between p-2 rounded border">
-                        <span className="text-sm">{p.profile?.username || 'Utilisateur inconnu'}</span>
-                        <Badge variant={PARTICIPANT_STATUS_CONFIG[p.status]?.variant || 'outline'}>
-                          {PARTICIPANT_STATUS_CONFIG[p.status]?.label || p.status}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {activeTab === 'discussion' && (
+                <div>
+                  <h3 className="font-semibold mb-3">
+                    Discussion ({messages?.length || 0} messages)
+                  </h3>
+                  {messagesLoading ? (
+                    <div className="flex items-center gap-2 text-muted-foreground text-sm py-4">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Chargement des messages...
+                    </div>
+                  ) : messagesError ? (
+                    <p className="text-destructive text-sm py-2">Erreur lors du chargement des messages</p>
+                  ) : !messages?.length ? (
+                    <p className="text-muted-foreground text-sm py-4">Aucun message dans cette discussion</p>
+                  ) : (
+                    <div className="space-y-3 max-h-[50vh] overflow-y-auto">
+                      {messages.map(msg => (
+                        <div key={msg.id} className="rounded-lg border p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium">
+                              {msg.sender?.username || 'Utilisateur inconnu'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(msg.created_at).toLocaleDateString('fr-FR', {
+                                day: 'numeric',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

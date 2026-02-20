@@ -1,11 +1,14 @@
-import { MapPin } from 'lucide-react';
+import { useState } from 'react';
+import { MapPin, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Pagination } from '@/components/ui/pagination';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,12 +23,34 @@ import {
 import { useCities, useToggleCityActive, useSeasons, useActivateSeason, useCompleteSeason } from '@/hooks/useCitiesSeasons';
 import { SEASON_STATUS_CONFIG } from '@/types/cities-seasons';
 
+const PAGE_SIZE = 50;
+
 export function CitiesSeasonsPage() {
-  const { data: cities, isLoading: citiesLoading } = useCities();
+  const [citySearch, setCitySearch] = useState('');
+  const [debouncedCitySearch, setDebouncedCitySearch] = useState('');
+  const [cityPage, setCityPage] = useState(0);
+
+  const { data: citiesData, isLoading: citiesLoading } = useCities({
+    search: debouncedCitySearch,
+    page: cityPage,
+    pageSize: PAGE_SIZE,
+  });
   const { data: seasons, isLoading: seasonsLoading } = useSeasons();
   const toggleActive = useToggleCityActive();
   const activateSeason = useActivateSeason();
   const completeSeason = useCompleteSeason();
+
+  const cities = citiesData?.data;
+  const citiesCount = citiesData?.count || 0;
+  const totalCityPages = Math.ceil(citiesCount / PAGE_SIZE);
+
+  const handleCitySearchChange = (value: string) => {
+    setCitySearch(value);
+    setCityPage(0);
+    setTimeout(() => {
+      setDebouncedCitySearch(value);
+    }, 300);
+  };
 
   return (
     <div className="space-y-6">
@@ -39,7 +64,7 @@ export function CitiesSeasonsPage() {
 
       <Tabs defaultValue="cities">
         <TabsList>
-          <TabsTrigger value="cities">Villes ({cities?.length || 0})</TabsTrigger>
+          <TabsTrigger value="cities">Villes ({citiesCount})</TabsTrigger>
           <TabsTrigger value="seasons">Saisons ({seasons?.length || 0})</TabsTrigger>
         </TabsList>
 
@@ -49,14 +74,28 @@ export function CitiesSeasonsPage() {
               <CardTitle>Villes enregistrées</CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="mb-4">
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher une ville..."
+                    value={citySearch}
+                    onChange={(e) => handleCitySearchChange(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              <Pagination page={cityPage} totalPages={totalCityPages} onPageChange={setCityPage} />
+
               {citiesLoading ? (
-                <div className="space-y-3">
+                <div className="space-y-3 mt-4">
                   {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-14" />)}
                 </div>
               ) : !cities?.length ? (
-                <p className="text-muted-foreground text-center py-8">Aucune ville enregistrée</p>
+                <p className="text-muted-foreground text-center py-8">Aucune ville trouvée</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 mt-4">
                   {cities.map(city => (
                     <div key={city.id} className="flex items-center justify-between p-3 rounded-lg border">
                       <div>
@@ -77,6 +116,10 @@ export function CitiesSeasonsPage() {
                   ))}
                 </div>
               )}
+
+              <div className="mt-4">
+                <Pagination page={cityPage} totalPages={totalCityPages} onPageChange={setCityPage} />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

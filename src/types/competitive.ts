@@ -54,8 +54,35 @@ export interface CompetitiveMatchesFilters {
   status?: MatchStatus | 'all';
   city_id?: string | 'all';
   match_type?: MatchType | 'all';
+  search?: string;
   page?: number;
   pageSize?: number;
+}
+
+export interface PlayerProfile {
+  id: string;
+  username: string | null;
+  created_at: string;
+}
+
+export interface PlayerCityGameElo {
+  city_id: string;
+  game_id: string;
+  current_elo: number;
+  peak_elo: number;
+  total_matches: number;
+  wins: number;
+  losses: number;
+  city?: { name: string } | null;
+  game?: { name: string; name_fr: string | null } | null;
+}
+
+export interface PlayerStats {
+  profile: PlayerProfile;
+  eloEntries: PlayerCityGameElo[];
+  totalMatches: number;
+  totalWins: number;
+  totalLosses: number;
 }
 
 export const MATCH_STATUS_CONFIG: Record<MatchStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' }> = {

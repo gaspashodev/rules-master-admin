@@ -1,21 +1,33 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import type { City, Season } from '@/types/cities-seasons';
+import type { City, Season, CitiesFilters } from '@/types/cities-seasons';
 
 // ============ CITIES ============
 
-export function useCities() {
-  return useQuery({
-    queryKey: ['cities', 'list'],
-    queryFn: async (): Promise<City[]> => {
-      const { data, error } = await supabase
-        .from('cities')
-        .select('*')
-        .order('name', { ascending: true });
+export function useCities(filters?: CitiesFilters) {
+  const page = filters?.page || 0;
+  const pageSize = filters?.pageSize || 50;
+  const search = filters?.search || '';
 
+  return useQuery({
+    queryKey: ['cities', 'list', { page, pageSize, search }],
+    queryFn: async (): Promise<{ data: City[]; count: number }> => {
+      let query = supabase
+        .from('cities')
+        .select('*', { count: 'exact' });
+
+      if (search && search.length >= 2) {
+        query = query.ilike('name', `%${search}%`);
+      }
+
+      query = query
+        .order('name', { ascending: true })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      const { data, error, count } = await query;
       if (error) throw error;
-      return data || [];
+      return { data: (data as City[]) || [], count: count || 0 };
     },
   });
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
-  Swords, Eye, CheckCircle, XCircle, Clock,
-  Ban, MoreHorizontal, Crown,
+  Eye, CheckCircle, XCircle, Clock, Search,
+  Ban, MoreHorizontal, Crown, User, Trophy, Swords,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,9 +20,9 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -49,6 +49,7 @@ import {
   useCancelMatch,
   useModifyPlayerPv,
   useResetPlayerSeasonPv,
+  usePlayerStats,
 } from '@/hooks/useCompetitive';
 import { useCities } from '@/hooks/useCitiesSeasons';
 import { MATCH_STATUS_CONFIG, MATCH_TYPE_CONFIG } from '@/types/competitive';
@@ -63,8 +64,115 @@ function formatDuration(seconds: number): string {
   return `${m}min`;
 }
 
+// ============ PLAYER STATS DIALOG ============
+
+function PlayerStatsDialog({
+  userId,
+  open,
+  onOpenChange,
+}: {
+  userId: string | undefined;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { data: stats, isLoading } = usePlayerStats(open ? userId : undefined);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Profil de {stats?.profile?.username || '...'}
+          </DialogTitle>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-20" />
+            <Skeleton className="h-40" />
+          </div>
+        ) : stats ? (
+          <div className="space-y-4">
+            {/* Summary cards */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg border p-3 text-center">
+                <Swords className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
+                <p className="text-2xl font-bold">{stats.totalMatches}</p>
+                <p className="text-xs text-muted-foreground">Parties jouées</p>
+              </div>
+              <div className="rounded-lg border p-3 text-center">
+                <Trophy className="h-4 w-4 mx-auto text-green-500 mb-1" />
+                <p className="text-2xl font-bold text-green-600">{stats.totalWins}</p>
+                <p className="text-xs text-muted-foreground">Victoires</p>
+              </div>
+              <div className="rounded-lg border p-3 text-center">
+                <XCircle className="h-4 w-4 mx-auto text-red-500 mb-1" />
+                <p className="text-2xl font-bold text-red-600">{stats.totalLosses}</p>
+                <p className="text-xs text-muted-foreground">Défaites</p>
+              </div>
+            </div>
+
+            <div className="text-sm text-muted-foreground">
+              Membre depuis le {new Date(stats.profile.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              {stats.totalMatches > 0 && (
+                <> — Winrate : {Math.round((stats.totalWins / stats.totalMatches) * 100)}%</>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Per-game breakdown */}
+            <div>
+              <h3 className="font-semibold mb-3">PV par jeu ({stats.eloEntries.length})</h3>
+              {stats.eloEntries.length === 0 ? (
+                <p className="text-muted-foreground text-sm">Aucune donnée</p>
+              ) : (
+                <div className="rounded-lg border overflow-hidden">
+                  <div className="grid grid-cols-6 gap-2 p-3 bg-muted text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    <span className="col-span-2">Jeu</span>
+                    <span>Ville</span>
+                    <span>PV</span>
+                    <span>Parties</span>
+                    <span>W/L</span>
+                  </div>
+                  {stats.eloEntries.map((entry, i) => (
+                    <div key={i} className="grid grid-cols-6 gap-2 p-3 border-t items-center text-sm">
+                      <span className="col-span-2 font-medium truncate">
+                        {entry.game?.name_fr || entry.game?.name || 'Jeu inconnu'}
+                      </span>
+                      <span className="text-muted-foreground truncate">{entry.city?.name || '-'}</span>
+                      <span className="font-bold">{entry.current_elo}
+                        {entry.peak_elo > entry.current_elo && (
+                          <span className="text-xs text-muted-foreground ml-1">(pic: {entry.peak_elo})</span>
+                        )}
+                      </span>
+                      <span>{entry.total_matches}</span>
+                      <span>
+                        <span className="text-green-600">{entry.wins}W</span>
+                        {' / '}
+                        <span className="text-red-600">{entry.losses}L</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-muted-foreground">Impossible de charger le profil</p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============ MAIN PAGE ============
+
 export function CompetitiveMatchesPage() {
   const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<MatchStatus | 'all'>('all');
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [matchTypeFilter, setMatchTypeFilter] = useState<MatchType | 'all'>('all');
@@ -72,6 +180,7 @@ export function CompetitiveMatchesPage() {
   const [modifyPvTarget, setModifyPvTarget] = useState<MatchParticipant | null>(null);
   const [newElo, setNewElo] = useState<string>('');
   const [resetPvTarget, setResetPvTarget] = useState<MatchParticipant | null>(null);
+  const [playerStatsUserId, setPlayerStatsUserId] = useState<string | undefined>(undefined);
 
   const { data, isLoading } = useCompetitiveMatches({
     page,
@@ -79,9 +188,11 @@ export function CompetitiveMatchesPage() {
     status: statusFilter,
     city_id: cityFilter,
     match_type: matchTypeFilter,
+    search: debouncedSearch,
   });
 
-  const { data: cities } = useCities();
+  const { data: citiesData } = useCities();
+  const cities = citiesData?.data;
   const { data: participants } = useMatchParticipants(selectedMatch?.id);
 
   const forceConfirm = useForceConfirmResults();
@@ -90,6 +201,14 @@ export function CompetitiveMatchesPage() {
   const resetPv = useResetPlayerSeasonPv();
 
   const totalPages = Math.ceil((data?.count || 0) / PAGE_SIZE);
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(0);
+    setTimeout(() => {
+      setDebouncedSearch(value);
+    }, 300);
+  };
 
   const handleModifyPv = () => {
     if (!modifyPvTarget || !selectedMatch || !newElo) return;
@@ -131,6 +250,16 @@ export function CompetitiveMatchesPage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Rechercher un joueur..."
+                className="pl-9"
+              />
+            </div>
+
             <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as MatchStatus | 'all'); setPage(0); }}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Statut" />
@@ -304,7 +433,13 @@ export function CompetitiveMatchesPage() {
                     </div>
                     {participants.map(p => (
                       <div key={p.id} className="grid grid-cols-7 gap-2 p-3 border-t items-center text-sm">
-                        <span className="font-medium truncate">{p.profile?.username || 'Inconnu'}</span>
+                        <button
+                          type="button"
+                          className="font-medium truncate text-left text-primary hover:underline cursor-pointer"
+                          onClick={() => setPlayerStatsUserId(p.user_id)}
+                        >
+                          {p.profile?.username || 'Inconnu'}
+                        </button>
                         <span>{p.role === 'referee' ? 'Arbitre' : 'Joueur'}</span>
                         <span>{p.team_id ?? '-'}</span>
                         <span className="font-medium">{p.placement ?? '-'}</span>
@@ -393,7 +528,7 @@ export function CompetitiveMatchesPage() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Annuler ce match ?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Le match sera marqué comme annulé et tous les PV gagnés ou perdus seront reversés. Cette action est irréversible.
+                        Le match sera marqué comme annulé et tous les PV gagnés ou perdus seront reversés. Les compteurs de parties, victoires et défaites seront aussi corrigés. Cette action est irréversible.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -412,6 +547,13 @@ export function CompetitiveMatchesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Player Stats Dialog */}
+      <PlayerStatsDialog
+        userId={playerStatsUserId}
+        open={!!playerStatsUserId}
+        onOpenChange={(open) => !open && setPlayerStatsUserId(undefined)}
+      />
 
       {/* Modify PV Dialog */}
       <Dialog open={!!modifyPvTarget} onOpenChange={(open) => { if (!open) { setModifyPvTarget(null); setNewElo(''); } }}>

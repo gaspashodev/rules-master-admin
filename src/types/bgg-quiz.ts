@@ -121,34 +121,6 @@ export interface BggQuizQuestion {
   created_at: string;
 }
 
-// ============ BGG QUIZ FLAGGED ============
-
-export type FlagReason = 'incorrect' | 'unclear' | 'offensive' | 'duplicate';
-export type FlagStatus = 'pending' | 'reviewed' | 'fixed' | 'dismissed';
-
-export interface BggQuizFlagged {
-  id: string;
-  question_id: string;
-  user_id: string;
-  reason: FlagReason;
-  comment: string | null;
-  status: FlagStatus;
-  created_at: string;
-  reviewed_at: string | null;
-  question?: BggQuizQuestion;
-}
-
-export interface FlaggedQuestionFilters {
-  status?: FlagStatus | 'all';
-  reason?: FlagReason | 'all';
-}
-
-export interface FlaggedQuestionsStats {
-  total: number;
-  byStatus: Record<FlagStatus, number>;
-  byReason: Record<FlagReason, number>;
-}
-
 // ============ BGG AWARDS ============
 
 export type AwardName = "As d'Or" | 'Spiel des Jahres';
@@ -216,20 +188,6 @@ export interface QuestionTemplate {
 }
 
 // ============ CONFIG HELPERS ============
-
-export const FLAG_STATUS_CONFIG: Record<FlagStatus, { label: string; color: string }> = {
-  pending: { label: 'En attente', color: 'destructive' },
-  reviewed: { label: 'Examiné', color: 'secondary' },
-  fixed: { label: 'Corrigé', color: 'default' },
-  dismissed: { label: 'Rejeté', color: 'outline' },
-};
-
-export const FLAG_REASON_CONFIG: Record<FlagReason, { label: string; color: string }> = {
-  incorrect: { label: 'Incorrect', color: 'red' },
-  unclear: { label: 'Pas clair', color: 'yellow' },
-  offensive: { label: 'Offensant', color: 'purple' },
-  duplicate: { label: 'Doublon', color: 'blue' },
-};
 
 export const QUESTION_TYPE_CONFIG: Record<BggQuestionType, { label: string; icon: string }> = {
   rating: { label: 'Note', icon: 'Star' },

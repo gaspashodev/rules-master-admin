@@ -6,7 +6,6 @@ export interface DashboardStats {
   totalQuizQuestions: number;
   activeQuizQuestions: number;
   totalAwards: number;
-  pendingFlagged: number;
   totalEvents: number;
   totalCompetitiveMatches: number;
   activeCompetitiveMatches: number;
@@ -18,11 +17,10 @@ export function useStats() {
   return useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: async (): Promise<DashboardStats> => {
-      const [bggGames, quizQuestions, awards, flagged, events, matches, participants] = await Promise.all([
+      const [bggGames, quizQuestions, awards, events, matches, participants] = await Promise.all([
         supabase.from('bgg_games_cache').select('*', { count: 'exact', head: true }),
         supabase.from('bgg_quiz_questions').select('id, is_active'),
         supabase.from('bgg_awards').select('*', { count: 'exact', head: true }),
-        supabase.from('bgg_quiz_flagged').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('events').select('*', { count: 'exact', head: true }),
         supabase.from('competitive_matches').select('status'),
         supabase.from('competitive_match_participants').select('user_id'),
@@ -36,7 +34,6 @@ export function useStats() {
         totalQuizQuestions: quizQuestions.data?.length || 0,
         activeQuizQuestions: quizQuestions.data?.filter(q => q.is_active).length || 0,
         totalAwards: awards.count || 0,
-        pendingFlagged: flagged.count || 0,
         totalEvents: events.count || 0,
         totalCompetitiveMatches: matchesData.length,
         activeCompetitiveMatches: matchesData.filter(m => m.status === 'in_progress').length,

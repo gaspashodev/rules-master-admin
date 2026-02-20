@@ -2,12 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type {
   BggQuizQuestion,
-  BggQuizFlagged,
   BggAward,
-  FlagStatus,
-  FlagReason,
-  FlaggedQuestionFilters,
-  FlaggedQuestionsStats,
   BggQuestionFilters,
   BggQuestionsStats,
   BggQuestionFormData,
@@ -355,115 +350,6 @@ export function useCreateBggGame() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bgg-games-cache'] });
       toast.success('Jeu ajouté à la base');
-    },
-    onError: (error: Error) => {
-      toast.error(`Erreur: ${error.message}`);
-    },
-  });
-}
-
-// ============ FLAGGED QUESTIONS ============
-
-export function useFlaggedQuestions(filters?: FlaggedQuestionFilters) {
-  return useQuery({
-    queryKey: ['bgg-quiz', 'flagged', filters],
-    queryFn: async (): Promise<BggQuizFlagged[]> => {
-      let query = supabase
-        .from('bgg_quiz_flagged')
-        .select(`
-          *,
-          question:bgg_quiz_questions(*)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (filters?.status && filters.status !== 'all') {
-        query = query.eq('status', filters.status);
-      }
-      if (filters?.reason && filters.reason !== 'all') {
-        query = query.eq('reason', filters.reason);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      return data || [];
-    },
-  });
-}
-
-export function useFlaggedQuestionsStats() {
-  return useQuery({
-    queryKey: ['bgg-quiz', 'flagged', 'stats'],
-    queryFn: async (): Promise<FlaggedQuestionsStats> => {
-      const { data, error } = await supabase
-        .from('bgg_quiz_flagged')
-        .select('status, reason');
-
-      if (error) throw error;
-
-      const stats: FlaggedQuestionsStats = {
-        total: data?.length || 0,
-        byStatus: { pending: 0, reviewed: 0, fixed: 0, dismissed: 0 },
-        byReason: { incorrect: 0, unclear: 0, offensive: 0, duplicate: 0 },
-      };
-
-      data?.forEach((item) => {
-        if (item.status in stats.byStatus) {
-          stats.byStatus[item.status as FlagStatus]++;
-        }
-        if (item.reason in stats.byReason) {
-          stats.byReason[item.reason as FlagReason]++;
-        }
-      });
-
-      return stats;
-    },
-  });
-}
-
-export function useUpdateFlagStatus() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: FlagStatus }): Promise<void> => {
-      const updateData: { status: FlagStatus; reviewed_at?: string } = { status };
-
-      if (status !== 'pending') {
-        updateData.reviewed_at = new Date().toISOString();
-      }
-
-      const { error } = await supabase
-        .from('bgg_quiz_flagged')
-        .update(updateData)
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bgg-quiz', 'flagged'] });
-      toast.success('Statut mis à jour');
-    },
-    onError: (error: Error) => {
-      toast.error(`Erreur: ${error.message}`);
-    },
-  });
-}
-
-export function useDeleteFlaggedQuestion() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (id: string): Promise<void> => {
-      const { error } = await supabase
-        .from('bgg_quiz_flagged')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bgg-quiz', 'flagged'] });
-      toast.success('Signalement supprimé');
     },
     onError: (error: Error) => {
       toast.error(`Erreur: ${error.message}`);

@@ -4,7 +4,6 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Layout } from '@/components/layout/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
-import { FlaggedQuestionsPage } from './pages/quiz/FlaggedQuestionsPage';
 import { BggQuestionsPage } from './pages/quiz/BggQuestionsPage';
 import { BggQuestionFormPage } from './pages/quiz/BggQuestionFormPage';
 import { AwardsPage } from './pages/quiz/AwardsPage';
@@ -12,6 +11,9 @@ import { BggGamesPage } from './pages/quiz/BggGamesPage';
 import { EventsPage } from './pages/events/EventsPage';
 import { CompetitiveMatchesPage } from './pages/competitive/CompetitiveMatchesPage';
 import { CitiesSeasonsPage } from './pages/competitive/CitiesSeasonsPage';
+import { TournamentTemplatesPage } from './pages/tournament/TournamentTemplatesPage';
+import { UsersPage } from './pages/users/UsersPage';
+import { ModerationPage } from './pages/moderation/ModerationPage';
 
 function App() {
   return (
@@ -32,7 +34,6 @@ function App() {
           <Route path="/settings" element={<SettingsPage />} />
           {/* Quiz BGG routes */}
           <Route path="/quiz/games" element={<BggGamesPage />} />
-          <Route path="/quiz/flagged" element={<FlaggedQuestionsPage />} />
           <Route path="/quiz/questions" element={<BggQuestionsPage />} />
           <Route path="/quiz/questions/new" element={<BggQuestionFormPage />} />
           <Route path="/quiz/questions/:id" element={<BggQuestionFormPage />} />
@@ -42,6 +43,12 @@ function App() {
           {/* Competitive routes */}
           <Route path="/competitive/matches" element={<CompetitiveMatchesPage />} />
           <Route path="/competitive/cities-seasons" element={<CitiesSeasonsPage />} />
+          {/* Tournament routes */}
+          <Route path="/tournament/templates" element={<TournamentTemplatesPage />} />
+          {/* Users routes */}
+          <Route path="/users" element={<UsersPage />} />
+          {/* Moderation routes */}
+          <Route path="/moderation" element={<ModerationPage />} />
         </Route>
       </Routes>
     </AuthProvider>

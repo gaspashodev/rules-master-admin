@@ -31,7 +31,6 @@ export interface EventParticipant {
   event_id: string;
   user_id: string;
   status: EventParticipantStatus;
-  created_at: string;
   profile?: {
     username: string | null;
   } | null;
@@ -43,6 +42,17 @@ export interface EventsFilters {
   dateTo?: string;
   page?: number;
   pageSize?: number;
+}
+
+export interface EventMessage {
+  id: string;
+  event_id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+  sender?: {
+    username: string | null;
+  } | null;
 }
 
 export const PARTICIPANT_STATUS_CONFIG: Record<EventParticipantStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' }> = {

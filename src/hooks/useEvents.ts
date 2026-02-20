@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { Event, EventParticipant, EventsFilters } from '@/types/events';
+import type { Event, EventParticipant, EventMessage, EventsFilters } from '@/types/events';
 
 // ============ EVENTS LIST ============
 
@@ -60,29 +60,45 @@ export function useEventParticipants(eventId: string | undefined) {
   return useQuery({
     queryKey: ['events', 'participants', eventId],
     queryFn: async (): Promise<EventParticipant[]> => {
-      // Fetch participants first
-      const { data: participants, error } = await supabase
+      const { data, error } = await supabase
         .from('event_participants')
-        .select('*')
+        .select(`
+          id,
+          event_id,
+          user_id,
+          status,
+          profile:profiles!user_id(username)
+        `)
+        .eq('event_id', eventId!);
+
+      if (error) throw error;
+      return (data as unknown as EventParticipant[]) || [];
+    },
+    enabled: !!eventId,
+  });
+}
+
+// ============ EVENT MESSAGES ============
+
+export function useEventMessages(eventId: string | undefined) {
+  return useQuery({
+    queryKey: ['events', 'messages', eventId],
+    queryFn: async (): Promise<EventMessage[]> => {
+      const { data, error } = await supabase
+        .from('event_messages')
+        .select(`
+          id,
+          event_id,
+          sender_id,
+          content,
+          created_at,
+          sender:profiles!sender_id(username)
+        `)
         .eq('event_id', eventId!)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      if (!participants?.length) return [];
-
-      // Fetch profiles separately for robustness
-      const userIds = [...new Set(participants.map(p => p.user_id))];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .in('id', userIds);
-
-      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
-
-      return participants.map(p => ({
-        ...p,
-        profile: profileMap.get(p.user_id) || null,
-      })) as EventParticipant[];
+      return (data as unknown as EventMessage[]) || [];
     },
     enabled: !!eventId,
   });

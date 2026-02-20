@@ -17,6 +17,12 @@ export interface Season {
   created_at: string;
 }
 
+export interface CitiesFilters {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
 export const SEASON_STATUS_CONFIG: Record<SeasonStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' }> = {
   active: { label: 'Active', variant: 'success' },
   completed: { label: 'Terminée', variant: 'outline' },
