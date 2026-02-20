@@ -249,6 +249,7 @@ function ContestationDialog({
   const { data: participants, isLoading: participantsLoading } = useMatchParticipants(contestation.match_id);
   const [resolution, setResolution] = useState<'resolved_cancelled' | 'resolved_dismissed' | ''>('');
   const [adminNote, setAdminNote] = useState('');
+  const [playerMessage, setPlayerMessage] = useState('');
 
   const handleResolve = () => {
     if (!resolution) return;
@@ -258,6 +259,7 @@ function ContestationDialog({
         matchId: contestation.match_id,
         resolution,
         adminNote,
+        playerMessage,
       },
       { onSuccess: () => onClose() }
     );
@@ -426,12 +428,22 @@ function ContestationDialog({
               </div>
 
               <div>
-                <Label className="mb-2 block">Note admin (optionnel)</Label>
+                <Label className="mb-2 block">Note admin (optionnel, interne)</Label>
                 <Textarea
-                  placeholder="Commentaire sur la resolution..."
+                  placeholder="Commentaire interne..."
                   value={adminNote}
                   onChange={(e) => setAdminNote(e.target.value)}
-                  rows={3}
+                  rows={2}
+                />
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Message aux joueurs (envoyé à tous les participants)</Label>
+                <Textarea
+                  placeholder="Explication envoyée aux joueurs du match..."
+                  value={playerMessage}
+                  onChange={(e) => setPlayerMessage(e.target.value)}
+                  rows={2}
                 />
               </div>
 
@@ -526,6 +538,7 @@ function ReportDialog({
   const { data: reportHistory, isLoading: historyLoading } = usePlayerReportHistory(report.reported_user_id);
   const [resolution, setResolution] = useState<'resolved_warned' | 'resolved_suspended' | 'resolved_banned' | 'resolved_dismissed' | ''>('');
   const [adminNote, setAdminNote] = useState('');
+  const [reportPlayerMessage, setReportPlayerMessage] = useState('');
   const [reliabilityPenalty, setReliabilityPenalty] = useState('50');
 
   // Exclude current report from history
@@ -540,6 +553,7 @@ function ReportDialog({
         resolution,
         adminNote,
         reliabilityPenalty: resolution === 'resolved_suspended' ? parseInt(reliabilityPenalty, 10) : undefined,
+        playerMessage: reportPlayerMessage,
       },
       { onSuccess: () => onClose() }
     );
@@ -669,12 +683,22 @@ function ReportDialog({
               )}
 
               <div>
-                <Label className="mb-2 block">Note admin (optionnel)</Label>
+                <Label className="mb-2 block">Note admin (optionnel, interne)</Label>
                 <Textarea
-                  placeholder="Commentaire sur la resolution..."
+                  placeholder="Commentaire interne..."
                   value={adminNote}
                   onChange={(e) => setAdminNote(e.target.value)}
-                  rows={3}
+                  rows={2}
+                />
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Message au joueur signalé</Label>
+                <Textarea
+                  placeholder="Explication envoyée au joueur..."
+                  value={reportPlayerMessage}
+                  onChange={(e) => setReportPlayerMessage(e.target.value)}
+                  rows={2}
                 />
               </div>
 

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import type { MatchContestation, PlayerReport, ModerationFilters } from '@/types/moderation';
+import { sendAdminNotification } from '@/hooks/useUsers';
 
 // ============ CONTESTATIONS ============
 
@@ -47,12 +48,34 @@ export function useResolveContestation() {
       matchId,
       resolution,
       adminNote,
+      playerMessage,
     }: {
       contestationId: string;
       matchId: string;
       resolution: 'resolved_cancelled' | 'resolved_dismissed';
       adminNote: string;
+      playerMessage?: string;
     }): Promise<void> => {
+      // Fetch match info with game name and date for messages
+      const { data: matchInfo, error: matchInfoError } = await supabase
+        .from('competitive_matches')
+        .select(`started_at, game:bgg_games_cache!game_id(name, name_fr)`)
+        .eq('id', matchId)
+        .single();
+      if (matchInfoError) throw matchInfoError;
+
+      const gameName = (matchInfo.game as { name: string; name_fr: string | null } | null)?.name_fr
+        || (matchInfo.game as { name: string; name_fr: string | null } | null)?.name
+        || 'jeu inconnu';
+      const matchDate = matchInfo.started_at
+        ? new Date(matchInfo.started_at).toLocaleDateString('fr-FR', {
+            day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+          })
+        : 'date inconnue';
+
+      // Store participants for PV info in messages
+      let participantsForMessage: Array<{ user_id: string; elo_before: number | null; elo_after: number | null }> = [];
+
       if (resolution === 'resolved_cancelled') {
         // Cancel match + rollback PV (same logic as useCancelMatch)
         const { data: match, error: matchFetchError } = await supabase
@@ -67,6 +90,8 @@ export function useResolveContestation() {
           .select('user_id, placement, elo_before, elo_after')
           .eq('match_id', matchId);
         if (partError) throw partError;
+
+        participantsForMessage = participants || [];
 
         const affectedPlayers = (participants || []).filter(
           (p: { elo_before: number | null; elo_after: number | null }) => p.elo_before !== null && p.elo_after !== null
@@ -121,11 +146,13 @@ export function useResolveContestation() {
         }
 
         // Set match to cancelled
-        const { error: cancelError } = await supabase
+        const { data: updatedMatch, error: cancelError } = await supabase
           .from('competitive_matches')
-          .update({ status: 'cancelled', cancelled_reason: 'Annulée suite à contestation' })
-          .eq('id', matchId);
+          .update({ status: 'cancelled', cancelled_reason: 'Annulée suite à contestation', results_pending_confirmation: false })
+          .eq('id', matchId)
+          .select('id');
         if (cancelError) throw cancelError;
+        if (!updatedMatch || updatedMatch.length === 0) throw new Error('Impossible de mettre à jour le statut du match');
       }
 
       // Update contestation status
@@ -138,6 +165,40 @@ export function useResolveContestation() {
         })
         .eq('id', contestationId);
       if (error) throw error;
+
+      // Send personalized message to each participant
+      if (playerMessage) {
+        const verdict = resolution === 'resolved_cancelled' ? 'retenue' : 'rejetée';
+
+        if (resolution === 'resolved_cancelled' && participantsForMessage.length > 0) {
+          // Cancelled: show reversed PV per player
+          for (const p of participantsForMessage) {
+            const hadElo = p.elo_before !== null && p.elo_after !== null;
+            const delta = hadElo ? p.elo_after! - p.elo_before! : 0;
+            const pvLine = hadElo
+              ? delta > 0
+                ? `Vos +${delta} PV gagnés ont été retirés.`
+                : delta < 0
+                  ? `Vos ${delta} PV perdus ont été restaurés.`
+                  : `Vos PV restent inchangés.`
+              : `Vos PV n'ont pas été impactés.`;
+            const fullMessage = `La contestation du résultat de la partie de "${gameName}" du ${matchDate} a été ${verdict}.\n\nEn conséquence :\n${pvLine}\nCette partie ne sera pas comptabilisée dans vos statistiques.\n\n${playerMessage}`;
+            await sendAdminNotification(p.user_id, fullMessage);
+          }
+        } else {
+          // Dismissed: send to all participants with no PV impact
+          const { data: allParticipants } = await supabase
+            .from('competitive_match_participants')
+            .select('user_id')
+            .eq('match_id', matchId);
+          if (allParticipants) {
+            for (const p of allParticipants) {
+              const fullMessage = `La contestation du résultat de la partie de "${gameName}" du ${matchDate} a été ${verdict}.\n\nVos PV restent inchangés.\nCette partie sera bien comptabilisée dans vos statistiques.\n\n${playerMessage}`;
+              await sendAdminNotification(p.user_id, fullMessage);
+            }
+          }
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['moderation'] });
@@ -228,12 +289,14 @@ export function useResolveReport() {
       resolution,
       adminNote,
       reliabilityPenalty,
+      playerMessage,
     }: {
       reportId: string;
       reportedUserId: string;
       resolution: 'resolved_warned' | 'resolved_suspended' | 'resolved_banned' | 'resolved_dismissed';
       adminNote: string;
       reliabilityPenalty?: number;
+      playerMessage?: string;
     }): Promise<void> => {
       // Apply action based on resolution
       if (resolution === 'resolved_suspended' && reliabilityPenalty !== undefined) {
@@ -262,6 +325,11 @@ export function useResolveReport() {
         })
         .eq('id', reportId);
       if (error) throw error;
+
+      // Send message to reported user
+      if (playerMessage) {
+        await sendAdminNotification(reportedUserId, playerMessage);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['moderation'] });

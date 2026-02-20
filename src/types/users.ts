@@ -1,7 +1,6 @@
 export interface UserProfile {
   id: string;
   username: string | null;
-  email: string | null;
   role: string;
   reliability_score: number;
   is_banned: boolean;

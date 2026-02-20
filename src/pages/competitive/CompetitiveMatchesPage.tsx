@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -176,11 +177,14 @@ export function CompetitiveMatchesPage() {
   const [statusFilter, setStatusFilter] = useState<MatchStatus | 'all'>('all');
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [matchTypeFilter, setMatchTypeFilter] = useState<MatchType | 'all'>('all');
-  const [selectedMatch, setSelectedMatch] = useState<CompetitiveMatch | null>(null);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [modifyPvTarget, setModifyPvTarget] = useState<MatchParticipant | null>(null);
   const [newElo, setNewElo] = useState<string>('');
   const [resetPvTarget, setResetPvTarget] = useState<MatchParticipant | null>(null);
   const [playerStatsUserId, setPlayerStatsUserId] = useState<string | undefined>(undefined);
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [cancelMessage, setCancelMessage] = useState('');
+  const [resetPvMessage, setResetPvMessage] = useState('');
 
   const { data, isLoading } = useCompetitiveMatches({
     page,
@@ -191,9 +195,12 @@ export function CompetitiveMatchesPage() {
     search: debouncedSearch,
   });
 
+  // Derive selectedMatch from query data so it auto-refreshes after mutations
+  const selectedMatch = data?.data?.find(m => m.id === selectedMatchId) ?? null;
+
   const { data: citiesData } = useCities();
   const cities = citiesData?.data;
-  const { data: participants } = useMatchParticipants(selectedMatch?.id);
+  const { data: participants } = useMatchParticipants(selectedMatchId);
 
   const forceConfirm = useForceConfirmResults();
   const cancelMatch = useCancelMatch();
@@ -227,12 +234,13 @@ export function CompetitiveMatchesPage() {
   };
 
   const handleResetPv = () => {
-    if (!resetPvTarget || !selectedMatch) return;
+    if (!resetPvTarget || !selectedMatch || !resetPvMessage.trim()) return;
     resetPv.mutate({
       userId: resetPvTarget.user_id,
       seasonId: selectedMatch.season_id || '',
+      message: resetPvMessage.trim(),
     }, {
-      onSuccess: () => setResetPvTarget(null),
+      onSuccess: () => { setResetPvTarget(null); setResetPvMessage(''); },
     });
   };
 
@@ -317,7 +325,7 @@ export function CompetitiveMatchesPage() {
                 <div
                   key={match.id}
                   className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
-                  onClick={() => setSelectedMatch(match)}
+                  onClick={() => setSelectedMatchId(match.id)}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -339,7 +347,7 @@ export function CompetitiveMatchesPage() {
                       {match.duration_seconds && <span>{formatDuration(match.duration_seconds)}</span>}
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedMatch(match); }}>
+                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedMatchId(match.id); }}>
                     <Eye className="h-4 w-4" />
                   </Button>
                 </div>
@@ -354,7 +362,7 @@ export function CompetitiveMatchesPage() {
       </Card>
 
       {/* Match Detail Dialog */}
-      <Dialog open={!!selectedMatch} onOpenChange={(open) => !open && setSelectedMatch(null)}>
+      <Dialog open={!!selectedMatch} onOpenChange={(open) => !open && setSelectedMatchId(null)}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -498,20 +506,29 @@ export function CompetitiveMatchesPage() {
                   <AlertDialogTrigger asChild>
                     <Button variant="outline" disabled={selectedMatch.status === 'completed' || selectedMatch.status === 'cancelled'}>
                       <CheckCircle className="h-4 w-4 mr-2" />
-                      Forcer confirmation
+                      Valider le match
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Forcer la confirmation des résultats ?</AlertDialogTitle>
+                      <AlertDialogTitle>Valider ce match ?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Tous les votes seront marqués comme confirmés. Les PV seront appliqués si le front-end détecte la majorité.
+                        Le match sera marqué comme terminé et les résultats seront confirmés pour tous les participants.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
+                    <Textarea
+                      placeholder="Raison de la validation (obligatoire, envoyée aux joueurs)..."
+                      value={confirmMessage}
+                      onChange={(e) => setConfirmMessage(e.target.value)}
+                      rows={2}
+                    />
                     <AlertDialogFooter>
                       <AlertDialogCancel>Annuler</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => forceConfirm.mutate(selectedMatch.id)}>
-                        Confirmer
+                      <AlertDialogAction
+                        onClick={() => { forceConfirm.mutate({ matchId: selectedMatch.id, message: confirmMessage.trim() }); setConfirmMessage(''); }}
+                        disabled={!confirmMessage.trim()}
+                      >
+                        Valider
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -528,13 +545,20 @@ export function CompetitiveMatchesPage() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Annuler ce match ?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Le match sera marqué comme annulé et tous les PV gagnés ou perdus seront reversés. Les compteurs de parties, victoires et défaites seront aussi corrigés. Cette action est irréversible.
+                        Le match sera annulé et tous les PV seront reversés. Cette action est irréversible.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
+                    <Textarea
+                      placeholder="Raison de l'annulation (obligatoire, envoyée aux joueurs)..."
+                      value={cancelMessage}
+                      onChange={(e) => setCancelMessage(e.target.value)}
+                      rows={2}
+                    />
                     <AlertDialogFooter>
                       <AlertDialogCancel>Annuler</AlertDialogCancel>
                       <AlertDialogAction
-                        onClick={() => cancelMatch.mutate(selectedMatch.id)}
+                        onClick={() => { cancelMatch.mutate({ matchId: selectedMatch.id, message: cancelMessage.trim() }); setCancelMessage(''); }}
+                        disabled={!cancelMessage.trim()}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       >
                         Annuler le match
@@ -602,20 +626,27 @@ export function CompetitiveMatchesPage() {
       </Dialog>
 
       {/* Reset PV AlertDialog */}
-      <AlertDialog open={!!resetPvTarget} onOpenChange={(open) => !open && setResetPvTarget(null)}>
+      <AlertDialog open={!!resetPvTarget} onOpenChange={(open) => { if (!open) { setResetPvTarget(null); setResetPvMessage(''); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
               Réinitialiser les PV de {resetPvTarget?.profile?.username} pour la saison ?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Cette action est irréversible. Tous les PV du joueur pour cette saison seront remis à zéro dans toutes les villes et tous les jeux.
+              Cette action est irréversible. Tous les PV du joueur pour cette saison seront remis à zéro.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <Textarea
+            placeholder="Raison du reset (obligatoire, envoyée au joueur)..."
+            value={resetPvMessage}
+            onChange={(e) => setResetPvMessage(e.target.value)}
+            rows={2}
+          />
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleResetPv}
+              disabled={!resetPvMessage.trim()}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Réinitialiser

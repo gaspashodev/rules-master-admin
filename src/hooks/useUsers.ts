@@ -13,8 +13,8 @@ export function useUsers(filters?: UsersFilters) {
     queryFn: async (): Promise<UserProfile[]> => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, email, role, reliability_score, is_banned, created_at')
-        .or(`username.ilike.%${search}%,email.ilike.%${search}%`)
+        .select('id, username, role, reliability_score, is_banned, created_at')
+        .ilike('username', `%${search}%`)
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -33,7 +33,7 @@ export function useUserProfile(userId: string | undefined) {
     queryFn: async (): Promise<UserProfile> => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, email, role, reliability_score, is_banned, created_at')
+        .select('id, username, role, reliability_score, is_banned, created_at')
         .eq('id', userId!)
         .single();
       if (error) throw error;
@@ -43,30 +43,64 @@ export function useUserProfile(userId: string | undefined) {
   });
 }
 
+// ============ ADMIN NOTIFICATION HELPER ============
+
+export async function sendAdminNotification(recipientId: string, content: string) {
+  if (!content.trim()) return;
+  const { error } = await supabase
+    .from('direct_messages')
+    .insert({ sender_id: null, recipient_id: recipientId, content: content.trim() });
+  if (error) console.error('Failed to send admin notification:', error);
+}
+
+// ============ ADMIN MESSAGES ============
+
+export interface AdminMessage {
+  id: string;
+  content: string;
+  created_at: string;
+}
+
+export function useAdminMessages(userId: string) {
+  return useQuery({
+    queryKey: ['users', 'admin-messages', userId],
+    queryFn: async (): Promise<AdminMessage[]> => {
+      const { data, error } = await supabase
+        .from('direct_messages')
+        .select('id, content, created_at')
+        .eq('recipient_id', userId)
+        .is('sender_id', null)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (data as unknown as AdminMessage[]) || [];
+    },
+  });
+}
+
 // ============ SEND DIRECT MESSAGE ============
 
 export function useSendDirectMessage() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      senderId,
-      receiverId,
+      recipientId,
       content,
     }: {
-      senderId: string;
-      receiverId: string;
+      recipientId: string;
       content: string;
     }): Promise<void> => {
       const { error } = await supabase
         .from('direct_messages')
         .insert({
-          sender_id: senderId,
-          receiver_id: receiverId,
+          sender_id: null,
+          recipient_id: recipientId,
           content,
-          type: 'system',
         });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['users', 'admin-messages', variables.recipientId] });
       toast.success('Message envoyé');
     },
     onError: (error: Error) => {
@@ -83,15 +117,18 @@ export function useUpdateReliabilityScore() {
     mutationFn: async ({
       userId,
       newScore,
+      message,
     }: {
       userId: string;
       newScore: number;
+      message?: string;
     }): Promise<void> => {
       const { error } = await supabase
         .from('profiles')
         .update({ reliability_score: Math.max(0, Math.min(100, newScore)) })
         .eq('id', userId);
       if (error) throw error;
+      if (message) await sendAdminNotification(userId, message);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -108,7 +145,8 @@ export function useUpdateReliabilityScore() {
 export function useBanUser() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (userId: string): Promise<void> => {
+    mutationFn: async ({ userId, message }: { userId: string; message?: string }): Promise<void> => {
+      if (message) await sendAdminNotification(userId, message);
       const { error } = await supabase
         .from('profiles')
         .update({ is_banned: true })
@@ -128,12 +166,13 @@ export function useBanUser() {
 export function useUnbanUser() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (userId: string): Promise<void> => {
+    mutationFn: async ({ userId, message }: { userId: string; message?: string }): Promise<void> => {
       const { error } = await supabase
         .from('profiles')
         .update({ is_banned: false })
         .eq('id', userId);
       if (error) throw error;
+      if (message) await sendAdminNotification(userId, message);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });

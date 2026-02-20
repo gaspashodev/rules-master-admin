@@ -1,6 +1,16 @@
 export type ContestationStatus = 'pending' | 'resolved_cancelled' | 'resolved_dismissed';
 export type ReportStatus = 'pending' | 'resolved_warned' | 'resolved_suspended' | 'resolved_banned' | 'resolved_dismissed';
 
+export interface PlacementSnapshotEntry {
+  participant_id: string;
+  user_id: string;
+  placement: number;
+  team_id: number | null;
+  elo_before: number;
+  elo_after: number;
+  elo_change: number;
+}
+
 export interface MatchContestation {
   id: string;
   match_id: string;
@@ -8,6 +18,7 @@ export interface MatchContestation {
   reason: string;
   status: ContestationStatus;
   admin_note: string | null;
+  placements_snapshot: PlacementSnapshotEntry[] | null;
   created_at: string;
   resolved_at: string | null;
   // Joins

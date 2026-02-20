@@ -32,10 +32,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useUsers, useSendDirectMessage, useUpdateReliabilityScore, useBanUser, useUnbanUser } from '@/hooks/useUsers';
+import { useUsers, useAdminMessages, useSendDirectMessage, useUpdateReliabilityScore, useBanUser, useUnbanUser } from '@/hooks/useUsers';
 import { useSeasons } from '@/hooks/useCitiesSeasons';
 import { useResetPlayerSeasonPv } from '@/hooks/useCompetitive';
-import { useAuth } from '@/hooks/useAuth';
 import type { UserProfile } from '@/types/users';
 
 function getReliabilityVariant(score: number): 'default' | 'success' | 'warning' | 'destructive' {
@@ -67,7 +66,7 @@ export function UsersPage() {
           <Users className="h-7 w-7" />
           Gestion des joueurs
         </h1>
-        <p className="text-muted-foreground">Recherchez un joueur par pseudo ou adresse email</p>
+        <p className="text-muted-foreground">Recherchez un joueur par pseudo</p>
       </div>
 
       <Card>
@@ -75,7 +74,7 @@ export function UsersPage() {
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Rechercher par pseudo ou email..."
+              placeholder="Rechercher par pseudo..."
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10"
@@ -106,9 +105,6 @@ export function UsersPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium truncate">{user.username || 'Sans pseudo'}</p>
-                      {user.email && (
-                        <span className="text-sm text-muted-foreground truncate">{user.email}</span>
-                      )}
                       <Badge variant="outline">{user.role}</Badge>
                       <Badge variant={getReliabilityVariant(user.reliability_score)}>
                         Fiabilité: {user.reliability_score}
@@ -151,8 +147,8 @@ function UserDetailDialog({
   onClose: () => void;
   onUserUpdated: (user: UserProfile) => void;
 }) {
-  const { user: authUser } = useAuth();
   const { data: seasons } = useSeasons();
+  const { data: adminMessages } = useAdminMessages(user.id);
 
   const sendMessage = useSendDirectMessage();
   const updateReliability = useUpdateReliabilityScore();
@@ -163,43 +159,63 @@ function UserDetailDialog({
   const [messageContent, setMessageContent] = useState('');
   const [selectedSeasonId, setSelectedSeasonId] = useState('');
   const [newReliabilityScore, setNewReliabilityScore] = useState(String(user.reliability_score));
+  const [reliabilityReason, setReliabilityReason] = useState('');
+  const [banMessage, setBanMessage] = useState('');
+  const [unbanMessage, setUnbanMessage] = useState('');
+  const [resetPvMessage, setResetPvMessage] = useState('');
 
   const handleSendMessage = () => {
-    if (!messageContent.trim() || !authUser) return;
+    if (!messageContent.trim()) return;
     sendMessage.mutate(
-      { senderId: authUser.id, receiverId: user.id, content: messageContent.trim() },
+      { recipientId: user.id, content: messageContent.trim() },
       { onSuccess: () => setMessageContent('') }
     );
   };
 
   const handleResetPv = () => {
-    if (!selectedSeasonId) return;
-    resetPv.mutate({ userId: user.id, seasonId: selectedSeasonId });
+    if (!selectedSeasonId || !resetPvMessage.trim()) return;
+    resetPv.mutate(
+      { userId: user.id, seasonId: selectedSeasonId, message: resetPvMessage.trim() },
+      { onSuccess: () => setResetPvMessage('') }
+    );
   };
 
   const handleUpdateReliability = () => {
     const score = parseInt(newReliabilityScore, 10);
     if (isNaN(score)) return;
     updateReliability.mutate(
-      { userId: user.id, newScore: score },
+      { userId: user.id, newScore: score, message: reliabilityReason },
       {
         onSuccess: () => {
           onUserUpdated({ ...user, reliability_score: Math.max(0, Math.min(100, score)) });
+          setReliabilityReason('');
         },
       }
     );
   };
 
   const handleBan = () => {
-    banUser.mutate(user.id, {
-      onSuccess: () => onUserUpdated({ ...user, is_banned: true }),
-    });
+    banUser.mutate(
+      { userId: user.id, message: banMessage },
+      {
+        onSuccess: () => {
+          onUserUpdated({ ...user, is_banned: true });
+          setBanMessage('');
+        },
+      }
+    );
   };
 
   const handleUnban = () => {
-    unbanUser.mutate(user.id, {
-      onSuccess: () => onUserUpdated({ ...user, is_banned: false }),
-    });
+    unbanUser.mutate(
+      { userId: user.id, message: unbanMessage },
+      {
+        onSuccess: () => {
+          onUserUpdated({ ...user, is_banned: false });
+          setUnbanMessage('');
+        },
+      }
+    );
   };
 
   return (
@@ -275,6 +291,22 @@ function UserDetailDialog({
               {sendMessage.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Envoyer
             </Button>
+
+            {adminMessages && adminMessages.length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm font-medium text-muted-foreground mb-2">Messages envoyés ({adminMessages.length})</p>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {adminMessages.map(msg => (
+                    <div key={msg.id} className="text-sm p-2 rounded bg-muted">
+                      <p>{msg.content}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(msg.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <Separator />
@@ -312,9 +344,19 @@ function UserDetailDialog({
                       Tous les PV de ce joueur pour la saison sélectionnée seront réinitialisés. Cette action est irréversible.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+                  <Textarea
+                    placeholder="Raison du reset (envoyée au joueur)..."
+                    value={resetPvMessage}
+                    onChange={(e) => setResetPvMessage(e.target.value)}
+                    rows={2}
+                  />
                   <AlertDialogFooter>
                     <AlertDialogCancel>Annuler</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleResetPv} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    <AlertDialogAction
+                      onClick={handleResetPv}
+                      disabled={!resetPvMessage.trim()}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
                       Confirmer le reset
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -332,24 +374,53 @@ function UserDetailDialog({
               Score de fiabilité
             </h3>
             <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                value={newReliabilityScore}
-                onChange={(e) => setNewReliabilityScore(e.target.value)}
-                className="w-[120px]"
-              />
-              <span className="text-sm text-muted-foreground">/ 100</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleUpdateReliability}
-                disabled={updateReliability.isPending}
-              >
-                {updateReliability.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Modifier
-              </Button>
+              <Badge variant={getReliabilityVariant(user.reliability_score)}>
+                Actuel : {user.reliability_score} / 100
+              </Badge>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    {updateReliability.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    Modifier
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Modifier le score de fiabilité</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Le nouveau score et la raison seront envoyés au joueur.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={newReliabilityScore}
+                        onChange={(e) => setNewReliabilityScore(e.target.value)}
+                        className="w-[120px]"
+                      />
+                      <span className="text-sm text-muted-foreground">/ 100</span>
+                    </div>
+                    <Textarea
+                      placeholder="Raison de la modification (obligatoire)..."
+                      value={reliabilityReason}
+                      onChange={(e) => setReliabilityReason(e.target.value)}
+                      rows={2}
+                    />
+                  </div>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleUpdateReliability}
+                      disabled={!reliabilityReason.trim() || updateReliability.isPending}
+                    >
+                      Confirmer
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
 
@@ -376,9 +447,15 @@ function UserDetailDialog({
                       Le joueur pourra à nouveau accéder à l'application.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+                  <Textarea
+                    placeholder="Raison du débannissement (obligatoire)..."
+                    value={unbanMessage}
+                    onChange={(e) => setUnbanMessage(e.target.value)}
+                    rows={2}
+                  />
                   <AlertDialogFooter>
                     <AlertDialogCancel>Annuler</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleUnban}>Débannir</AlertDialogAction>
+                    <AlertDialogAction onClick={handleUnban} disabled={!unbanMessage.trim()}>Débannir</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
@@ -397,10 +474,17 @@ function UserDetailDialog({
                       Le joueur sera exclu de l'application. Cette action peut être annulée ultérieurement.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+                  <Textarea
+                    placeholder="Raison du bannissement (obligatoire)..."
+                    value={banMessage}
+                    onChange={(e) => setBanMessage(e.target.value)}
+                    rows={2}
+                  />
                   <AlertDialogFooter>
                     <AlertDialogCancel>Annuler</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={handleBan}
+                      disabled={!banMessage.trim()}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
                       Confirmer le ban

@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import type { CompetitiveMatch, MatchParticipant, CompetitiveMatchesFilters, PlayerStats } from '@/types/competitive';
+import type { PlacementSnapshotEntry } from '@/types/moderation';
+import { sendAdminNotification } from '@/hooks/useUsers';
 
 // ============ MATCHES LIST ============
 
@@ -99,19 +101,166 @@ export function useMatchParticipants(matchId: string | undefined) {
 
 // ============ ADMIN ACTIONS ============
 
+function formatMatchDate(dateStr: string | null): string {
+  if (!dateStr) return 'date inconnue';
+  return new Date(dateStr).toLocaleDateString('fr-FR', {
+    day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function formatPvLine(eloChange: number): string {
+  if (eloChange > 0) return `Vous avez gagné +${eloChange} PV.`;
+  if (eloChange < 0) return `Vous avez perdu ${eloChange} PV.`;
+  return `Vos PV restent inchangés.`;
+}
+
+function formatReversedPvLine(eloBefore: number | null, eloAfter: number | null): string {
+  if (eloBefore === null || eloAfter === null) return `Vos PV n'ont pas été impactés.`;
+  const delta = eloAfter - eloBefore;
+  if (delta > 0) return `Vos +${delta} PV gagnés ont été retirés.`;
+  if (delta < 0) return `Vos ${delta} PV perdus ont été restaurés.`;
+  return `Vos PV restent inchangés.`;
+}
+
+// Shared helper: apply ELO from snapshot entries to player_city_game_elo + recalculate global
+async function applySnapshotElo(
+  entries: PlacementSnapshotEntry[],
+  seasonId: string,
+  gameId: string,
+  matchCityId: string,
+  isDraw: boolean,
+) {
+  for (const entry of entries) {
+    // Fetch current ELO entry for this player+game+season
+    const { data: eloRow } = await supabase
+      .from('player_city_game_elo')
+      .select('city_id, current_elo, peak_elo, total_matches, wins, losses')
+      .eq('user_id', entry.user_id)
+      .eq('season_id', seasonId)
+      .eq('game_id', gameId)
+      .limit(1)
+      .maybeSingle();
+
+    const cityId = eloRow?.city_id || matchCityId;
+    const currentElo = eloRow?.current_elo || 0;
+    const newElo = Math.max(0, currentElo + entry.elo_change);
+    const isWin = entry.placement === 1 && !isDraw;
+    const isLoss = entry.placement > 1 && !isDraw;
+
+    // Update participant record with ELO data
+    const { error: updatePartError } = await supabase
+      .from('competitive_match_participants')
+      .update({
+        elo_before: entry.elo_before,
+        elo_after: entry.elo_after,
+        elo_change: entry.elo_change,
+        result_confirmed: true,
+      })
+      .eq('id', entry.participant_id);
+    if (updatePartError) throw updatePartError;
+
+    // Update or create player_city_game_elo
+    if (eloRow) {
+      const { error: updateEloError } = await supabase
+        .from('player_city_game_elo')
+        .update({
+          current_elo: newElo,
+          peak_elo: Math.max(eloRow.peak_elo, newElo),
+          total_matches: eloRow.total_matches + 1,
+          wins: eloRow.wins + (isWin ? 1 : 0),
+          losses: eloRow.losses + (isLoss ? 1 : 0),
+        })
+        .eq('user_id', entry.user_id)
+        .eq('city_id', cityId)
+        .eq('season_id', seasonId)
+        .eq('game_id', gameId);
+      if (updateEloError) throw updateEloError;
+    } else {
+      const { error: insertEloError } = await supabase
+        .from('player_city_game_elo')
+        .insert({
+          user_id: entry.user_id,
+          city_id: cityId,
+          season_id: seasonId,
+          game_id: gameId,
+          current_elo: newElo,
+          peak_elo: Math.max(0, newElo),
+          total_matches: 1,
+          wins: isWin ? 1 : 0,
+          losses: isLoss ? 1 : 0,
+        });
+      if (insertEloError) throw insertEloError;
+    }
+
+    // Recalculate global ELO
+    const { error: rpcError } = await supabase.rpc('recalculate_global_elo', {
+      p_user_id: entry.user_id,
+      p_city_id: cityId,
+      p_season_id: seasonId,
+    });
+    if (rpcError) throw rpcError;
+  }
+}
+
 export function useForceConfirmResults() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (matchId: string): Promise<void> => {
-      const { error } = await supabase
-        .from('competitive_match_participants')
-        .update({ result_confirmed: true })
-        .eq('match_id', matchId);
-      if (error) throw error;
+    mutationFn: async ({ matchId, message }: { matchId: string; message: string }): Promise<void> => {
+      // 1. Fetch match info with game name and date
+      const { data: match, error: matchFetchError } = await supabase
+        .from('competitive_matches')
+        .select(`season_id, game_id, city_id, is_draw, started_at,
+          game:bgg_games_cache!game_id(name, name_fr)`)
+        .eq('id', matchId)
+        .single();
+      if (matchFetchError) throw matchFetchError;
+
+      const gameName = (match.game as { name: string; name_fr: string | null } | null)?.name_fr
+        || (match.game as { name: string; name_fr: string | null } | null)?.name
+        || 'jeu inconnu';
+      const matchDate = formatMatchDate(match.started_at);
+
+      // 2. Try to get placements_snapshot from contestation
+      const { data: contestation } = await supabase
+        .from('match_contestations')
+        .select('placements_snapshot')
+        .eq('match_id', matchId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const snapshot = contestation?.placements_snapshot as PlacementSnapshotEntry[] | null;
+
+      if (!snapshot || snapshot.length === 0) {
+        throw new Error('Aucun snapshot de résultats trouvé pour ce match');
+      }
+
+      // 3. Apply ELO from snapshot
+      await applySnapshotElo(snapshot, match.season_id, match.game_id, match.city_id, match.is_draw);
+
+      // 4. Set match to completed
+      const { data: updated, error: matchError } = await supabase
+        .from('competitive_matches')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          results_pending_confirmation: false,
+        })
+        .eq('id', matchId)
+        .select('id');
+      if (matchError) throw matchError;
+      if (!updated || updated.length === 0) throw new Error('Impossible de mettre à jour le statut du match');
+
+      // 5. Send personalized message to each participant
+      for (const entry of snapshot) {
+        const fullMessage = `La contestation du résultat de la partie de "${gameName}" du ${matchDate} a été retenue.\n\nEn conséquence :\n${formatPvLine(entry.elo_change)}\nCette partie sera bien comptabilisée dans vos statistiques.\n\n${message}`;
+        await sendAdminNotification(entry.user_id, fullMessage);
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['competitive', 'matches'] });
-      toast.success('Résultats confirmés pour tous les participants');
+      queryClient.invalidateQueries({ queryKey: ['competitive'] });
+      queryClient.invalidateQueries({ queryKey: ['moderation'] });
+      toast.success('Match validé — PV appliqués');
     },
     onError: (error: Error) => {
       toast.error(`Erreur: ${error.message}`);
@@ -122,14 +271,20 @@ export function useForceConfirmResults() {
 export function useCancelMatch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (matchId: string): Promise<void> => {
-      // 1. Fetch match info
+    mutationFn: async ({ matchId, message }: { matchId: string; message: string }): Promise<void> => {
+      // 1. Fetch match info with game name and date
       const { data: match, error: matchFetchError } = await supabase
         .from('competitive_matches')
-        .select('season_id, game_id')
+        .select(`season_id, game_id, started_at,
+          game:bgg_games_cache!game_id(name, name_fr)`)
         .eq('id', matchId)
         .single();
       if (matchFetchError) throw matchFetchError;
+
+      const gameName = (match.game as { name: string; name_fr: string | null } | null)?.name_fr
+        || (match.game as { name: string; name_fr: string | null } | null)?.name
+        || 'jeu inconnu';
+      const matchDate = formatMatchDate(match.started_at);
 
       // 2. Fetch participants with elo_before, elo_after, placement
       const { data: participants, error: partError } = await supabase
@@ -177,7 +332,6 @@ export function useCancelMatch() {
               total_matches: newTotalMatches,
               wins: Math.max(0, eloRow.wins - (p.placement === 1 ? 1 : 0)),
               losses: Math.max(0, eloRow.losses - (p.placement !== null && p.placement > 1 ? 1 : 0)),
-              // peak_elo: not touched — can't recalculate without full history
             })
             .eq('user_id', p.user_id)
             .eq('city_id', eloRow.city_id)
@@ -196,11 +350,19 @@ export function useCancelMatch() {
       }
 
       // 4. Set match status to cancelled
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('competitive_matches')
-        .update({ status: 'cancelled', cancelled_reason: 'Annulée par l\'Admin' })
-        .eq('id', matchId);
+        .update({ status: 'cancelled', cancelled_reason: message, results_pending_confirmation: false })
+        .eq('id', matchId)
+        .select('id');
       if (error) throw error;
+      if (!updated || updated.length === 0) throw new Error('Impossible de mettre à jour le statut du match');
+
+      // 5. Send personalized message to each participant
+      for (const p of (participants || [])) {
+        const fullMessage = `La partie de "${gameName}" du ${matchDate} a été annulée.\n\nEn conséquence :\n${formatReversedPvLine(p.elo_before, p.elo_after)}\nCette partie ne sera pas comptabilisée dans vos statistiques.\n\n${message}`;
+        await sendAdminNotification(p.user_id, fullMessage);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['competitive'] });
@@ -262,12 +424,13 @@ export function useModifyPlayerPv() {
 export function useResetPlayerSeasonPv() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ userId, seasonId }: { userId: string; seasonId: string }): Promise<void> => {
+    mutationFn: async ({ userId, seasonId, message }: { userId: string; seasonId: string; message: string }): Promise<void> => {
       const { error } = await supabase.rpc('reset_player_season_pv', {
         p_user_id: userId,
         p_season_id: seasonId,
       });
       if (error) throw error;
+      await sendAdminNotification(userId, message);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['competitive'] });
