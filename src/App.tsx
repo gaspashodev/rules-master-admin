@@ -5,7 +5,7 @@ import { Layout } from '@/components/layout/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { BggQuestionsPage } from './pages/quiz/BggQuestionsPage';
-import { BggQuestionFormPage } from './pages/quiz/BggQuestionFormPage';
+import { TournamentFormPage } from './pages/tournament/TournamentFormPage';
 import { AwardsPage } from './pages/quiz/AwardsPage';
 import { BggGamesPage } from './pages/quiz/BggGamesPage';
 import { EventsPage } from './pages/events/EventsPage';
@@ -35,8 +35,6 @@ function App() {
           {/* Quiz BGG routes */}
           <Route path="/quiz/games" element={<BggGamesPage />} />
           <Route path="/quiz/questions" element={<BggQuestionsPage />} />
-          <Route path="/quiz/questions/new" element={<BggQuestionFormPage />} />
-          <Route path="/quiz/questions/:id" element={<BggQuestionFormPage />} />
           <Route path="/quiz/awards" element={<AwardsPage />} />
           {/* Events routes */}
           <Route path="/events" element={<EventsPage />} />
@@ -45,6 +43,8 @@ function App() {
           <Route path="/competitive/cities-seasons" element={<CitiesSeasonsPage />} />
           {/* Tournament routes */}
           <Route path="/tournament/templates" element={<TournamentTemplatesPage />} />
+          <Route path="/tournament/templates/new" element={<TournamentFormPage />} />
+          <Route path="/tournament/templates/:id" element={<TournamentFormPage />} />
           {/* Users routes */}
           <Route path="/users" element={<UsersPage />} />
           {/* Moderation routes */}

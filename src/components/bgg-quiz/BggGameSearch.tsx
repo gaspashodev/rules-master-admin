@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useSearchBggGames, useFetchBggData, type BggGameCache } from '@/hooks/useBggQuiz';
@@ -30,14 +31,39 @@ export function BggGameSearch({
   const [showAddById, setShowAddById] = useState(false);
   const [bggIdInput, setBggIdInput] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
 
   const { data: games, isLoading } = useSearchBggGames(searchTerm);
   const fetchBggData = useFetchBggData();
 
+  // Calculate dropdown position relative to viewport
+  const updateDropdownPos = useCallback(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+  }, []);
+
+  // Update position when dropdown opens or search changes
+  useEffect(() => {
+    if (isOpen) {
+      updateDropdownPos();
+    }
+  }, [isOpen, searchTerm, updateDropdownPos]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setIsOpen(false);
         setShowAddById(false);
       }
@@ -46,6 +72,14 @@ export function BggGameSearch({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Close on scroll in parent (dialog scroll)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleScroll = () => updateDropdownPos();
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [isOpen, updateDropdownPos]);
 
   const handleSelectGame = (game: BggGameCache) => {
     onChange({ id: game.id, bgg_id: game.bgg_id, name: game.name });
@@ -69,10 +103,7 @@ export function BggGameSearch({
     try {
       const result = await fetchBggData.mutateAsync({ ids: [bggId] });
       if (result.inserted > 0 || result.updated > 0) {
-        // Fetch the game data to get the id and name
-        // We need to wait a bit for the cache to be invalidated
         setTimeout(async () => {
-          // Search for the game we just added
           const { data } = await import('@/lib/supabase').then(m => m.supabase)
             .from('bgg_games_cache')
             .select('id, bgg_id, name')
@@ -97,7 +128,7 @@ export function BggGameSearch({
   };
 
   // If a game is selected, show the selection
-  if (value?.id) {
+  if (value?.bgg_id) {
     return (
       <div className={cn('flex items-center gap-2', className)}>
         <div className="flex-1 p-2 border rounded-md bg-muted/50">
@@ -116,6 +147,8 @@ export function BggGameSearch({
       </div>
     );
   }
+
+  const showDropdown = isOpen && searchTerm.length >= 3;
 
   return (
     <div ref={containerRef} className={cn('relative', className)}>
@@ -137,9 +170,13 @@ export function BggGameSearch({
         )}
       </div>
 
-      {/* Dropdown results */}
-      {isOpen && searchTerm.length >= 3 && (
-        <div className="absolute z-50 w-full mt-1 max-h-72 overflow-auto bg-popover border rounded-md shadow-lg">
+      {/* Dropdown results — portaled to body to escape overflow clipping */}
+      {showDropdown && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[100] max-h-72 overflow-auto bg-popover border rounded-md shadow-lg"
+          style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+        >
           {isLoading ? (
             <div className="p-3 text-center text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
@@ -242,7 +279,8 @@ export function BggGameSearch({
               </div>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

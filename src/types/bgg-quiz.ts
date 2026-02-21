@@ -21,7 +21,6 @@ export interface BggGameOption {
 
 // Structure question_data selon le brief
 export interface RatingQuestionData {
-  type: 'rating';
   question: string;
   options: BggGameOption[];
   correct_index: number;
@@ -29,7 +28,6 @@ export interface RatingQuestionData {
 }
 
 export interface DesignerQuestionData {
-  type: 'designer';
   question: string;
   game: BggGameOption;
   options: string[];
@@ -38,7 +36,6 @@ export interface DesignerQuestionData {
 }
 
 export interface PlayersQuestionData {
-  type: 'players';
   question: string;
   options: BggGameOption[];
   correct_index: number;
@@ -46,7 +43,6 @@ export interface PlayersQuestionData {
 }
 
 export interface ComplexityQuestionData {
-  type: 'complexity';
   question: string;
   options: BggGameOption[];
   correct_index: number;
@@ -54,7 +50,6 @@ export interface ComplexityQuestionData {
 }
 
 export interface DurationQuestionData {
-  type: 'duration';
   question: string;
   options: BggGameOption[];
   correct_index: number;
@@ -62,7 +57,6 @@ export interface DurationQuestionData {
 }
 
 export interface DescriptionQuestionData {
-  type: 'description';
   question: string;
   description: string;
   options: BggGameOption[];
@@ -71,7 +65,6 @@ export interface DescriptionQuestionData {
 }
 
 export interface PhotoQuestionData {
-  type: 'photo';
   question: string;
   image_url: string;
   options: string[];
@@ -80,7 +73,6 @@ export interface PhotoQuestionData {
 }
 
 export interface AwardQuestionData {
-  type: 'award';
   question: string;
   options: string[];
   correct_index: number;
@@ -88,7 +80,6 @@ export interface AwardQuestionData {
 }
 
 export interface CustomQuestionData {
-  type: 'custom';
   question: string;
   correct_answer: BggGameOption;
   wrong_answers?: BggGameOption[]; // Optional - if not provided, will be random
@@ -111,8 +102,6 @@ export interface BggQuizQuestion {
   id: string;
   type: BggQuestionType;
   question_data: QuestionData;
-  difficulty: BggQuestionDifficulty;
-  is_manual: boolean;
   is_active: boolean;
   times_used: number;
   times_correct: number;
@@ -155,16 +144,13 @@ export interface BggAwardFormData {
 // ============ BGG QUESTIONS FILTERS ============
 
 export interface BggQuestionFilters {
-  type?: BggQuestionType | 'all';
-  difficulty?: BggQuestionDifficulty | 'all';
-  is_manual?: boolean | 'all';
   is_active?: boolean | 'all';
+  has_photo?: boolean;
+  search?: string;
 }
 
 export interface BggQuestionsStats {
   total: number;
-  manual: number;
-  auto: number;
   active: number;
   inactive: number;
 }
@@ -174,7 +160,6 @@ export interface BggQuestionsStats {
 export interface BggQuestionFormData {
   type: BggQuestionType;
   question_data: QuestionData;
-  difficulty: BggQuestionDifficulty;
   is_active: boolean;
 }
 

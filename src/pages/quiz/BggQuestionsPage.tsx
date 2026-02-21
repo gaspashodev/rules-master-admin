@@ -1,9 +1,12 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -11,6 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,11 +35,22 @@ import {
 import {
   useBggQuestions,
   useBggQuestionsStats,
+  useBggQuestion,
   useToggleBggQuestionActive,
   useDeleteBggQuestion,
+  useCreateBggQuestion,
+  useUpdateBggQuestion,
 } from '@/hooks/useBggQuiz';
-import type { BggQuestionType, BggQuestionDifficulty, BggQuestionFilters } from '@/types/bgg-quiz';
-import { QUESTION_TYPE_CONFIG, DIFFICULTY_CONFIG } from '@/types/bgg-quiz';
+import { ImageUploader, QuestionTemplateInput } from '@/components/bgg-quiz';
+import { useSearchBggGames } from '@/hooks/useBggQuiz';
+import { createPortal } from 'react-dom';
+import { toast } from 'sonner';
+import type {
+  BggQuestionFilters,
+  BggQuestionFormData,
+  BggGameOption,
+  CustomQuestionData,
+} from '@/types/bgg-quiz';
 import {
   Plus,
   Trash2,
@@ -37,39 +58,340 @@ import {
   ListTodo,
   Power,
   PowerOff,
-  Star,
-  Palette,
-  Users,
-  Puzzle,
-  Clock,
-  FileText,
   Image,
-  Trophy,
-  Edit,
-  TrendingUp,
-  CheckCircle,
-  XCircle,
+  Search,
+  Save,
+  Loader2,
 } from 'lucide-react';
 
-const typeIcons: Record<BggQuestionType, React.ElementType> = {
-  rating: Star,
-  designer: Palette,
-  players: Users,
-  complexity: Puzzle,
-  duration: Clock,
-  description: FileText,
-  photo: Image,
-  award: Trophy,
-  custom: Edit,
-};
+// ============ GAME ANSWER INPUT (free text + BGG autocomplete) ============
+
+function GameAnswerInput({
+  value,
+  onChange,
+  placeholder = 'Nom du jeu...',
+}: {
+  value: BggGameOption;
+  onChange: (game: BggGameOption) => void;
+  placeholder?: string;
+}) {
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const inputRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
+
+  const { data: suggestions } = useSearchBggGames(
+    showSuggestions && value.name.length >= 3 ? value.name : ''
+  );
+
+  const updatePos = useCallback(() => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 2, left: rect.left, width: rect.width });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showSuggestions) updatePos();
+  }, [showSuggestions, value.name, updatePos]);
+
+  useEffect(() => {
+    if (!showSuggestions) return;
+    const handleScroll = () => updatePos();
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [showSuggestions, updatePos]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        inputRef.current && !inputRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const hasSuggestions = showSuggestions && value.name.length >= 3 && suggestions && suggestions.length > 0;
+
+  return (
+    <div ref={inputRef}>
+      <Input
+        value={value.name}
+        onChange={(e) => {
+          onChange({ bgg_id: 0, name: e.target.value });
+          setShowSuggestions(true);
+        }}
+        onFocus={() => setShowSuggestions(true)}
+        placeholder={placeholder}
+      />
+      {hasSuggestions && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[100] max-h-48 overflow-auto bg-popover border rounded-md shadow-lg py-1"
+          style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+        >
+          {suggestions.map((game) => (
+            <button
+              key={game.id}
+              type="button"
+              className="w-full px-3 py-1.5 text-left hover:bg-muted text-sm"
+              onClick={() => {
+                onChange({ bgg_id: game.bgg_id, name: game.name });
+                setShowSuggestions(false);
+              }}
+            >
+              <span className="font-medium">{game.name}</span>
+              <span className="text-xs text-muted-foreground ml-2">BGG #{game.bgg_id}</span>
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+const emptyGame: BggGameOption = { bgg_id: 0, name: '' };
+
+const getDefaultQuestionData = (): CustomQuestionData => ({
+  question: '',
+  correct_answer: { ...emptyGame },
+  wrong_answers: undefined,
+  explanation: '',
+  image_url: '',
+});
+
+// ============ QUESTION FORM DIALOG ============
+
+function QuestionFormDialog({
+  open,
+  onOpenChange,
+  questionId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  questionId: string | null;
+}) {
+  const isEditing = !!questionId;
+  const { data: existingQuestion } = useBggQuestion(questionId || undefined);
+  const createQuestion = useCreateBggQuestion();
+  const updateQuestion = useUpdateBggQuestion();
+
+  const [isActive, setIsActive] = useState(true);
+  const [questionData, setQuestionData] = useState<CustomQuestionData>(getDefaultQuestionData());
+  const [manualWrongAnswers, setManualWrongAnswers] = useState(false);
+
+  // Reset form when dialog opens/closes or question changes
+  useEffect(() => {
+    if (open) {
+      if (existingQuestion) {
+        setIsActive(existingQuestion.is_active);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = existingQuestion.question_data as any;
+        setQuestionData({
+          question: data.question || '',
+          correct_answer: data.correct_answer || { ...emptyGame },
+          wrong_answers: data.wrong_answers,
+          explanation: data.explanation || '',
+          image_url: data.image_url || '',
+        });
+        if (data.wrong_answers && data.wrong_answers.length > 0) {
+          setManualWrongAnswers(true);
+        }
+      } else if (!questionId) {
+        // New question — reset form
+        setIsActive(true);
+        setQuestionData(getDefaultQuestionData());
+        setManualWrongAnswers(false);
+      }
+    }
+  }, [open, existingQuestion, questionId]);
+
+  const updateField = <K extends keyof CustomQuestionData>(field: K, value: CustomQuestionData[K]) => {
+    setQuestionData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const updateWrongAnswer = (index: number, game: BggGameOption) => {
+    const newWrongAnswers = [...(questionData.wrong_answers || [{ ...emptyGame }, { ...emptyGame }, { ...emptyGame }])];
+    newWrongAnswers[index] = game;
+    updateField('wrong_answers', newWrongAnswers);
+  };
+
+  const handleManualWrongAnswersToggle = (enabled: boolean) => {
+    setManualWrongAnswers(enabled);
+    if (enabled && !questionData.wrong_answers) {
+      updateField('wrong_answers', [{ ...emptyGame }, { ...emptyGame }, { ...emptyGame }]);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!questionData.question.trim()) {
+      toast.error('Veuillez saisir une question');
+      return;
+    }
+
+    if (!questionData.correct_answer.name.trim()) {
+      toast.error('Veuillez saisir la bonne réponse');
+      return;
+    }
+
+    if (manualWrongAnswers && questionData.wrong_answers) {
+      const validWrongAnswers = questionData.wrong_answers.filter(a => a.name.trim());
+      if (validWrongAnswers.length < 3) {
+        toast.error('Veuillez saisir 3 mauvaises réponses');
+        return;
+      }
+    }
+
+    const dataToSave: CustomQuestionData = {
+      ...questionData,
+      wrong_answers: manualWrongAnswers ? questionData.wrong_answers : undefined,
+    };
+
+    const formData: BggQuestionFormData = {
+      type: dataToSave.image_url ? 'photo' : 'custom',
+      is_active: isActive,
+      question_data: dataToSave,
+    };
+
+    if (isEditing && questionId) {
+      await updateQuestion.mutateAsync({ id: questionId, data: formData });
+    } else {
+      await createQuestion.mutateAsync(formData);
+    }
+    onOpenChange(false);
+  };
+
+  const isPending = createQuestion.isPending || updateQuestion.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {isEditing ? 'Modifier la question' : 'Nouvelle question'}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          {/* Question text */}
+          <div className="space-y-2">
+            <Label htmlFor="question">Question *</Label>
+            <QuestionTemplateInput
+              value={questionData.question}
+              onChange={(value) => updateField('question', value)}
+              placeholder="Entrez votre question..."
+            />
+          </div>
+
+          {/* Image (optional) */}
+          <div className="space-y-2">
+            <Label>Image (optionnel)</Label>
+            <ImageUploader
+              value={questionData.image_url || ''}
+              onChange={(url) => updateField('image_url', url)}
+              maxSizeKB={50}
+            />
+          </div>
+
+          {/* Correct answer */}
+          <div className="space-y-2">
+            <Label>Bonne réponse *</Label>
+            <GameAnswerInput
+              value={questionData.correct_answer}
+              onChange={(game) => updateField('correct_answer', game)}
+              placeholder="Tapez un nom ou recherchez un jeu BGG..."
+            />
+          </div>
+
+          {/* Manual wrong answers toggle */}
+          <div className="space-y-4 pt-4 border-t">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={manualWrongAnswers}
+                onCheckedChange={handleManualWrongAnswersToggle}
+                id="manual-wrong"
+              />
+              <div>
+                <Label htmlFor="manual-wrong">Choisir les mauvaises réponses</Label>
+                <p className="text-xs text-muted-foreground">
+                  Par défaut, 3 jeux aléatoires seront proposés
+                </p>
+              </div>
+            </div>
+
+            {manualWrongAnswers && (
+              <div className="space-y-3 pl-4 border-l-2 border-muted">
+                <Label>Mauvaises réponses (3)</Label>
+                {[0, 1, 2].map((index) => (
+                  <GameAnswerInput
+                    key={index}
+                    value={questionData.wrong_answers?.[index] || emptyGame}
+                    onChange={(game) => updateWrongAnswer(index, game)}
+                    placeholder={`Mauvaise réponse ${index + 1}...`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Explanation */}
+          <div className="space-y-2">
+            <Label htmlFor="explanation">Explication (optionnel)</Label>
+            <Textarea
+              id="explanation"
+              value={questionData.explanation}
+              onChange={(e) => updateField('explanation', e.target.value)}
+              placeholder="Explication affichée après la réponse..."
+              rows={3}
+            />
+          </div>
+
+          {/* Active toggle */}
+          <div className="flex items-center gap-3 pt-4 border-t">
+            <Switch
+              checked={isActive}
+              onCheckedChange={setIsActive}
+              id="is-active"
+            />
+            <Label htmlFor="is-active">Question active</Label>
+          </div>
+        </div>
+
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Annuler
+          </Button>
+          <Button onClick={handleSubmit} disabled={isPending}>
+            {isPending ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Enregistrement...</>
+            ) : (
+              <><Save className="h-4 w-4 mr-2" />Enregistrer</>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============ MAIN PAGE ============
 
 export function BggQuestionsPage() {
   const [filters, setFilters] = useState<BggQuestionFilters>({
-    type: 'all',
-    difficulty: 'all',
-    is_manual: 'all',
     is_active: 'all',
+    has_photo: false,
+    search: '',
   });
+  const [searchInput, setSearchInput] = useState('');
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editQuestionId, setEditQuestionId] = useState<string | null>(null);
 
   const { data: questions, isLoading } = useBggQuestions(filters);
   const { data: stats } = useBggQuestionsStats();
@@ -77,111 +399,91 @@ export function BggQuestionsPage() {
   const toggleActive = useToggleBggQuestionActive();
   const deleteQuestion = useDeleteBggQuestion();
 
+  // Client-side filtering for search and photo (operates on JSONB fields)
+  const filteredQuestions = useMemo(() => {
+    if (!questions) return [];
+    let result = questions;
+
+    if (filters.has_photo) {
+      result = result.filter(q => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = q.question_data as any;
+        return !!data?.image_url;
+      });
+    }
+
+    if (filters.search && filters.search.length >= 2) {
+      const term = filters.search.toLowerCase();
+      result = result.filter(q => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = q.question_data as any;
+        const answer = data?.correct_answer?.name?.toLowerCase() || '';
+        const question = data?.question?.toLowerCase() || '';
+        return answer.includes(term) || question.includes(term);
+      });
+    }
+
+    return result;
+  }, [questions, filters.has_photo, filters.search]);
+
   const hasActiveFilter =
-    filters.type !== 'all' ||
-    filters.difficulty !== 'all' ||
-    filters.is_manual !== 'all' ||
-    filters.is_active !== 'all';
+    filters.is_active !== 'all' ||
+    filters.has_photo ||
+    (filters.search && filters.search.length >= 2);
 
   const clearFilters = () => {
-    setFilters({
-      type: 'all',
-      difficulty: 'all',
-      is_manual: 'all',
-      is_active: 'all',
-    });
+    setFilters({ is_active: 'all', has_photo: false, search: '' });
+    setSearchInput('');
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
+    setTimeout(() => {
+      setFilters(f => ({ ...f, search: value }));
+    }, 300);
+  };
+
+  const handleCreate = () => {
+    setEditQuestionId(null);
+    setFormOpen(true);
+  };
+
+  const handleEdit = (id: string) => {
+    setEditQuestionId(id);
+    setFormOpen(true);
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <ListTodo className="h-8 w-8" />
+          <h1 className="text-2xl font-bold flex items-center gap-3">
+            <ListTodo className="h-7 w-7" />
             Questions Quiz BGG
           </h1>
           <p className="text-muted-foreground">
-            {stats?.total || 0} questions au total
-            {stats && (
-              <span className="ml-2 text-sm">
-                ({stats.manual} manuelles, {stats.auto} auto-générées)
-              </span>
-            )}
+            {stats?.total || 0} questions ({stats?.active || 0} actives)
           </p>
         </div>
-        <Link to="/quiz/questions/new">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Nouvelle question
-          </Button>
-        </Link>
+        <Button onClick={handleCreate}>
+          <Plus className="h-4 w-4 mr-2" />
+          Nouvelle question
+        </Button>
       </div>
 
       {/* Filtres */}
       <Card>
         <CardContent className="py-4">
           <div className="flex items-center gap-4 flex-wrap">
-            <span className="text-sm text-muted-foreground">Filtrer:</span>
-            <Select
-              value={filters.type?.toString() || 'all'}
-              onValueChange={(v) =>
-                setFilters((f) => ({ ...f, type: v as BggQuestionType | 'all' }))
-              }
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les types</SelectItem>
-                {Object.entries(QUESTION_TYPE_CONFIG).map(([key, config]) => (
-                  <SelectItem key={key} value={key}>
-                    {config.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={filters.difficulty?.toString() || 'all'}
-              onValueChange={(v) =>
-                setFilters((f) => ({
-                  ...f,
-                  difficulty: v as BggQuestionDifficulty | 'all',
-                }))
-              }
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Difficulté" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes</SelectItem>
-                <SelectItem value="easy">Facile</SelectItem>
-                <SelectItem value="advanced">Avancé</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={
-                filters.is_manual === 'all'
-                  ? 'all'
-                  : filters.is_manual
-                    ? 'manual'
-                    : 'auto'
-              }
-              onValueChange={(v) =>
-                setFilters((f) => ({
-                  ...f,
-                  is_manual: v === 'all' ? 'all' : v === 'manual',
-                }))
-              }
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes</SelectItem>
-                <SelectItem value="manual">Manuelles</SelectItem>
-                <SelectItem value="auto">Auto-générées</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={searchInput}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Rechercher par question ou réponse..."
+                className="pl-9"
+              />
+            </div>
             <Select
               value={
                 filters.is_active === 'all'
@@ -206,9 +508,18 @@ export function BggQuestionsPage() {
                 <SelectItem value="inactive">Inactives</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant={filters.has_photo ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilters(f => ({ ...f, has_photo: !f.has_photo }))}
+              className="gap-1.5"
+            >
+              <Image className="h-3.5 w-3.5" />
+              Avec photo
+            </Button>
             {hasActiveFilter && (
               <Button variant="ghost" size="sm" onClick={clearFilters}>
-                Effacer les filtres
+                Effacer
               </Button>
             )}
           </div>
@@ -217,117 +528,93 @@ export function BggQuestionsPage() {
 
       {/* Liste des questions */}
       {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+        <div className="space-y-1">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-10" />
           ))}
         </div>
       ) : (
         <Card>
           <CardContent className="p-0">
-            <div className="divide-y">
-              {questions?.length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground mb-4">
-                    Aucune question {hasActiveFilter && 'avec ces filtres'}
-                  </p>
-                  {!hasActiveFilter && (
-                    <Link to="/quiz/questions/new">
-                      <Button>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Créer une question
-                      </Button>
-                    </Link>
-                  )}
+            {filteredQuestions.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground mb-4">
+                  Aucune question {hasActiveFilter && 'avec ces filtres'}
+                </p>
+                {!hasActiveFilter && (
+                  <Button onClick={handleCreate}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Créer une question
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="divide-y">
+                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/30">
+                  <span>Question / Réponse</span>
+                  <span className="w-16 text-center">Stats</span>
+                  <span className="w-12 text-center">Statut</span>
+                  <span className="w-24 text-center">Actions</span>
                 </div>
-              )}
-              {questions?.map((question) => {
-                const TypeIcon = typeIcons[question.type] || Edit;
-                const typeConfig = QUESTION_TYPE_CONFIG[question.type];
-                const diffConfig = DIFFICULTY_CONFIG[question.difficulty];
-                const successRate =
-                  question.times_used > 0
-                    ? Math.round(
-                        (question.times_correct / question.times_used) * 100
-                      )
-                    : null;
+                {filteredQuestions.map((question) => {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const data = question.question_data as any;
+                  const answerName = data?.correct_answer?.name || '';
+                  const questionText = data?.question || 'Question sans titre';
+                  const hasImage = !!data?.image_url;
+                  const successRate =
+                    question.times_used > 0
+                      ? Math.round((question.times_correct / question.times_used) * 100)
+                      : null;
 
-                return (
-                  <div
-                    key={question.id}
-                    className="p-4 hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        {/* Header avec badges */}
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <Badge variant="outline" className="gap-1">
-                            <TypeIcon className="h-3 w-3" />
-                            {typeConfig?.label || question.type}
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className={
-                              diffConfig?.color === 'green'
-                                ? 'border-green-500 text-green-600'
-                                : 'border-orange-500 text-orange-600'
-                            }
-                          >
-                            {diffConfig?.label || question.difficulty}
-                          </Badge>
-                          <Badge variant={question.is_manual ? 'secondary' : 'outline'}>
-                            {question.is_manual ? 'Manuelle' : 'Auto'}
-                          </Badge>
-                          {question.is_active ? (
-                            <Badge variant="default" className="gap-1 bg-green-600">
-                              <CheckCircle className="h-3 w-3" />
-                              Active
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="gap-1 text-orange-600">
-                              <XCircle className="h-3 w-3" />
-                              Inactive
-                            </Badge>
-                          )}
-                        </div>
-
-                        {/* Question text */}
-                        <p className="font-medium mb-2 line-clamp-2">
-                          {question.question_data?.question || 'Question sans titre'}
+                  return (
+                    <div
+                      key={question.id}
+                      className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-3 py-2 items-center hover:bg-muted/50 transition-colors group"
+                    >
+                      {/* Question + answer */}
+                      <div className="min-w-0">
+                        <p className="text-sm truncate">
+                          {hasImage && <Image className="h-3.5 w-3.5 inline mr-1.5 text-muted-foreground" />}
+                          {questionText}
                         </p>
+                        {answerName && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            → {answerName}
+                          </p>
+                        )}
+                      </div>
 
-                        {/* Stats */}
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <TrendingUp className="h-3.5 w-3.5" />
-                            Utilisée {question.times_used}x
-                          </span>
-                          {successRate !== null && (
-                            <>
-                              <span className="flex items-center gap-1 text-green-600">
-                                <CheckCircle className="h-3.5 w-3.5" />
-                                {question.times_correct} ({successRate}%)
-                              </span>
-                              <span className="flex items-center gap-1 text-red-600">
-                                <XCircle className="h-3.5 w-3.5" />
-                                {question.times_incorrect}
-                              </span>
-                            </>
-                          )}
-                        </div>
+                      {/* Stats */}
+                      <span className="w-16 text-center text-xs text-muted-foreground">
+                        {question.times_used > 0
+                          ? `${question.times_used}x${successRate !== null ? ` (${successRate}%)` : ''}`
+                          : '—'}
+                      </span>
+
+                      {/* Status */}
+                      <div className="w-12 flex justify-center">
+                        {question.is_active ? (
+                          <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600">On</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-orange-600">Off</Badge>
+                        )}
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Link to={`/quiz/questions/${question.id}`}>
-                          <Button variant="outline" size="icon" className="h-9 w-9">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </Link>
+                      <div className="w-24 flex items-center justify-center gap-1">
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="icon"
-                          className="h-9 w-9"
+                          className="h-7 w-7"
+                          onClick={() => handleEdit(question.id)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
                           title={question.is_active ? 'Désactiver' : 'Activer'}
                           onClick={() =>
                             toggleActive.mutate({
@@ -337,9 +624,9 @@ export function BggQuestionsPage() {
                           }
                         >
                           {question.is_active ? (
-                            <PowerOff className="h-4 w-4 text-orange-500" />
+                            <PowerOff className="h-3.5 w-3.5 text-orange-500" />
                           ) : (
-                            <Power className="h-4 w-4 text-green-500" />
+                            <Power className="h-3.5 w-3.5 text-green-500" />
                           )}
                         </Button>
                         <AlertDialog>
@@ -347,16 +634,16 @@ export function BggQuestionsPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-destructive h-9 w-9"
+                              className="h-7 w-7 text-destructive"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Supprimer cette question ?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Cette action est irréversible. La question sera définitivement supprimée.
+                                Cette action est irréversible.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -372,13 +659,20 @@ export function BggQuestionsPage() {
                         </AlertDialog>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
+
+      {/* Question Form Dialog */}
+      <QuestionFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        questionId={editQuestionId}
+      />
     </div>
   );
 }

@@ -46,7 +46,7 @@ const createImage = (url: string): Promise<HTMLImageElement> =>
 async function getCroppedImg(
   imageSrc: string,
   pixelCrop: Area,
-  maxSizeKB: number = 200
+  maxSizeKB: number = 50
 ): Promise<Blob> {
   const image = await createImage(imageSrc);
   const canvas = document.createElement('canvas');
@@ -73,12 +73,30 @@ async function getCroppedImg(
     pixelCrop.height
   );
 
+  // Cap dimensions to 800px max before compression
+  const MAX_DIM = 800;
+  if (canvas.width > MAX_DIM || canvas.height > MAX_DIM) {
+    const ratio = Math.min(MAX_DIM / canvas.width, MAX_DIM / canvas.height);
+    const newW = Math.round(canvas.width * ratio);
+    const newH = Math.round(canvas.height * ratio);
+    const tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width = newW;
+    tmpCanvas.height = newH;
+    const tmpCtx = tmpCanvas.getContext('2d');
+    if (tmpCtx) {
+      tmpCtx.drawImage(canvas, 0, 0, newW, newH);
+      canvas.width = newW;
+      canvas.height = newH;
+      ctx.drawImage(tmpCanvas, 0, 0);
+    }
+  }
+
   // Compress iteratively until under max size
-  let quality = 0.9;
+  let quality = 0.85;
   let blob: Blob | null = null;
   const maxBytes = maxSizeKB * 1024;
 
-  while (quality > 0.1) {
+  while (quality > 0.05) {
     blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob((b) => resolve(b), 'image/jpeg', quality);
     });
@@ -87,25 +105,28 @@ async function getCroppedImg(
       break;
     }
 
-    quality -= 0.1;
+    quality -= 0.05;
   }
 
-  // If still too large, resize
+  // If still too large, progressively resize
   if (blob && blob.size > maxBytes) {
-    const scale = Math.sqrt(maxBytes / blob.size);
-    const newWidth = Math.floor(canvas.width * scale);
-    const newHeight = Math.floor(canvas.height * scale);
+    let scale = 0.8;
+    while (scale >= 0.3 && blob && blob.size > maxBytes) {
+      const newWidth = Math.round(canvas.width * scale);
+      const newHeight = Math.round(canvas.height * scale);
 
-    const resizedCanvas = document.createElement('canvas');
-    resizedCanvas.width = newWidth;
-    resizedCanvas.height = newHeight;
-    const resizedCtx = resizedCanvas.getContext('2d');
+      const resizedCanvas = document.createElement('canvas');
+      resizedCanvas.width = newWidth;
+      resizedCanvas.height = newHeight;
+      const resizedCtx = resizedCanvas.getContext('2d');
 
-    if (resizedCtx) {
-      resizedCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
-      blob = await new Promise<Blob | null>((resolve) => {
-        resizedCanvas.toBlob((b) => resolve(b), 'image/jpeg', 0.8);
-      });
+      if (resizedCtx) {
+        resizedCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+        blob = await new Promise<Blob | null>((resolve) => {
+          resizedCanvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7);
+        });
+      }
+      scale -= 0.1;
     }
   }
 
@@ -121,7 +142,7 @@ export function ImageUploader({
   onChange,
   bucket = 'quiz-images',
   folder = 'jeu',
-  maxSizeKB = 200,
+  maxSizeKB = 50,
   aspectRatio,
   className,
 }: ImageUploaderProps) {

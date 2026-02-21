@@ -368,15 +368,6 @@ export function useBggQuestions(filters?: BggQuestionFilters) {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (filters?.type && filters.type !== 'all') {
-        query = query.eq('type', filters.type);
-      }
-      if (filters?.difficulty && filters.difficulty !== 'all') {
-        query = query.eq('difficulty', filters.difficulty);
-      }
-      if (filters?.is_manual !== undefined && filters.is_manual !== 'all') {
-        query = query.eq('is_manual', filters.is_manual);
-      }
       if (filters?.is_active !== undefined && filters.is_active !== 'all') {
         query = query.eq('is_active', filters.is_active);
       }
@@ -414,21 +405,17 @@ export function useBggQuestionsStats() {
     queryFn: async (): Promise<BggQuestionsStats> => {
       const { data, error } = await supabase
         .from('bgg_quiz_questions')
-        .select('is_manual, is_active');
+        .select('is_active');
 
       if (error) throw error;
 
       const stats: BggQuestionsStats = {
         total: data?.length || 0,
-        manual: 0,
-        auto: 0,
         active: 0,
         inactive: 0,
       };
 
       data?.forEach((item) => {
-        if (item.is_manual) stats.manual++;
-        else stats.auto++;
         if (item.is_active) stats.active++;
         else stats.inactive++;
       });
@@ -447,7 +434,6 @@ export function useCreateBggQuestion() {
         .from('bgg_quiz_questions')
         .insert([{
           ...data,
-          is_manual: true,
           times_used: 0,
           times_correct: 0,
           times_incorrect: 0,
@@ -680,21 +666,17 @@ export function useIncrementTemplateUsage() {
 
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      const { error } = await supabase.rpc('increment_template_usage', { template_id: id });
-      if (error) {
-        // Fallback if RPC doesn't exist - manual increment
-        const { data: current } = await supabase
-          .from('bgg_quiz_question_templates')
-          .select('usage_count')
-          .eq('id', id)
-          .single();
+      const { data: current } = await supabase
+        .from('bgg_quiz_question_templates')
+        .select('usage_count')
+        .eq('id', id)
+        .single();
 
-        if (current) {
-          await supabase
-            .from('bgg_quiz_question_templates')
-            .update({ usage_count: (current.usage_count || 0) + 1 })
-            .eq('id', id);
-        }
+      if (current) {
+        await supabase
+          .from('bgg_quiz_question_templates')
+          .update({ usage_count: (current.usage_count || 0) + 1 })
+          .eq('id', id);
       }
     },
     onSuccess: () => {

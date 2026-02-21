@@ -58,6 +58,23 @@ export function useTournamentTemplates(filters?: TournamentTemplatesFilters) {
   });
 }
 
+export function useTournamentTemplate(id: string | undefined) {
+  return useQuery({
+    queryKey: ['tournament-templates', 'detail', id],
+    queryFn: async (): Promise<TournamentTemplate | null> => {
+      if (!id) return null;
+      const { data, error } = await supabase
+        .from('tournament_templates')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return data as unknown as TournamentTemplate;
+    },
+    enabled: !!id,
+  });
+}
+
 export function useCreateTournamentTemplate() {
   const queryClient = useQueryClient();
   return useMutation({
