@@ -196,6 +196,7 @@ function QuestionFormDialog({
         setQuestionData({
           question: data.question || '',
           correct_answer: data.correct_answer || { ...emptyGame },
+          alternative_answers: data.alternative_answers,
           wrong_answers: data.wrong_answers,
           explanation: data.explanation || '',
           image_url: data.image_url || '',
@@ -248,8 +249,10 @@ function QuestionFormDialog({
       }
     }
 
+    const cleanedAlternatives = questionData.alternative_answers?.filter(a => a.trim());
     const dataToSave: CustomQuestionData = {
       ...questionData,
+      alternative_answers: cleanedAlternatives && cleanedAlternatives.length > 0 ? cleanedAlternatives : undefined,
       wrong_answers: manualWrongAnswers ? questionData.wrong_answers : undefined,
     };
 
@@ -307,6 +310,55 @@ function QuestionFormDialog({
               onChange={(game) => updateField('correct_answer', game)}
               placeholder="Tapez un nom ou recherchez un jeu BGG..."
             />
+          </div>
+
+          {/* Alternative correct answers */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Réponses alternatives acceptées</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => updateField('alternative_answers', [
+                  ...(questionData.alternative_answers || []),
+                  '',
+                ])}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Ajouter
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Synonymes ou variantes du nom acceptés comme bonne réponse
+            </p>
+            {questionData.alternative_answers?.map((alt, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <Input
+                  value={alt}
+                  onChange={(e) => {
+                    const updated = [...(questionData.alternative_answers || [])];
+                    updated[index] = e.target.value;
+                    updateField('alternative_answers', updated);
+                  }}
+                  placeholder={`Ex: nom alternatif, abréviation...`}
+                  className="h-8 text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-destructive"
+                  onClick={() => {
+                    const updated = (questionData.alternative_answers || []).filter((_, i) => i !== index);
+                    updateField('alternative_answers', updated.length > 0 ? updated : undefined);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
           </div>
 
           {/* Manual wrong answers toggle */}

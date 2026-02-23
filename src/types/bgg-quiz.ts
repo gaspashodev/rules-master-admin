@@ -82,6 +82,7 @@ export interface AwardQuestionData {
 export interface CustomQuestionData {
   question: string;
   correct_answer: BggGameOption;
+  alternative_answers?: string[]; // Synonymes / noms alternatifs acceptés comme bonne réponse
   wrong_answers?: BggGameOption[]; // Optional - if not provided, will be random
   explanation: string;
   image_url?: string;
