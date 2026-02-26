@@ -98,7 +98,7 @@ async function getCroppedImg(
 
   while (quality > 0.05) {
     blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob((b) => resolve(b), 'image/jpeg', quality);
+      canvas.toBlob((b) => resolve(b), 'image/webp', quality);
     });
 
     if (blob && blob.size <= maxBytes) {
@@ -123,7 +123,7 @@ async function getCroppedImg(
       if (resizedCtx) {
         resizedCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
         blob = await new Promise<Blob | null>((resolve) => {
-          resizedCanvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7);
+          resizedCanvas.toBlob((b) => resolve(b), 'image/webp', 0.7);
         });
       }
       scale -= 0.1;
@@ -228,13 +228,13 @@ export function ImageUploader({
       const blob = await getCroppedImg(imageSrc, croppedAreaPixels, maxSizeKB);
 
       // Generate unique filename
-      const filename = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
+      const filename = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
 
       // Upload to Supabase
       const { error: uploadError } = await supabase.storage
         .from(bucket)
         .upload(filename, blob, {
-          contentType: 'image/jpeg',
+          contentType: 'image/webp',
           cacheControl: '3600',
         });
 

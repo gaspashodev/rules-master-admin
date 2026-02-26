@@ -39,11 +39,13 @@ function ImageUploadField({
   value,
   onChange,
   folder,
+  maxSizeKB,
 }: {
   label: string;
   value: string;
   onChange: (url: string) => void;
   folder: string;
+  maxSizeKB: number;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -53,7 +55,7 @@ function ImageUploadField({
     if (!file) return;
     setUploading(true);
     try {
-      const url = await uploadTournamentImage(file, folder);
+      const url = await uploadTournamentImage(file, folder, maxSizeKB);
       onChange(url);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur lors de l\'upload');
@@ -73,6 +75,8 @@ function ImageUploadField({
     }
     onChange('');
   };
+
+  const sizeLabel = maxSizeKB >= 1024 ? `${Math.round(maxSizeKB / 1024)} Mo` : `${maxSizeKB} Ko`;
 
   return (
     <div className="space-y-2">
@@ -101,7 +105,7 @@ function ImageUploadField({
           {uploading ? (
             <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Upload en cours...</>
           ) : (
-            <><Upload className="h-4 w-4 mr-2" />Choisir une image (2 Mo max)</>
+            <><Upload className="h-4 w-4 mr-2" />Choisir une image ({sizeLabel} max)</>
           )}
         </Button>
       )}
@@ -403,10 +407,11 @@ export function TournamentFormPage() {
   const filledCount = filledGames.length;
   const allFilled = filledCount === size;
 
-  const buildPayload = () => ({
+  const buildPayload = (status: 'draft' | 'published') => ({
     share_code: shareCode.trim().toUpperCase(),
     size,
     all_games: filledGames,
+    status,
     is_featured: isFeatured,
     custom_title: customTitle || null,
     custom_image_url: customImageUrl || null,
@@ -425,7 +430,7 @@ export function TournamentFormPage() {
       return;
     }
 
-    const payload = buildPayload();
+    const payload = buildPayload('published');
 
     if (isEdit && id) {
       updateTemplate.mutate({ id, ...payload }, {
@@ -444,7 +449,7 @@ export function TournamentFormPage() {
       return;
     }
 
-    const payload = buildPayload();
+    const payload = buildPayload('draft');
 
     if (isEdit && id) {
       updateTemplate.mutate({ id, ...payload }, {
@@ -547,12 +552,14 @@ export function TournamentFormPage() {
                 value={customImageUrl}
                 onChange={setCustomImageUrl}
                 folder="covers"
+                maxSizeKB={200}
               />
               <ImageUploadField
                 label="Image de partage podium"
                 value={customShareImageUrl}
                 onChange={setCustomShareImageUrl}
                 folder="share"
+                maxSizeKB={2048}
               />
               <div className="flex items-center gap-3">
                 <Switch checked={isFeatured} onCheckedChange={setIsFeatured} />

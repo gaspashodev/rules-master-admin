@@ -42,6 +42,7 @@ import {
   useUpdateBggQuestion,
 } from '@/hooks/useBggQuiz';
 import { ImageUploader, QuestionTemplateInput } from '@/components/bgg-quiz';
+import { GalleryPicker } from '@/components/shared/GalleryPicker';
 import { useSearchBggGames } from '@/hooks/useBggQuiz';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -59,6 +60,8 @@ import {
   Power,
   PowerOff,
   Image,
+  Upload,
+  X,
   Search,
   Save,
   Loader2,
@@ -185,6 +188,8 @@ function QuestionFormDialog({
   const [isActive, setIsActive] = useState(true);
   const [questionData, setQuestionData] = useState<CustomQuestionData>(getDefaultQuestionData());
   const [manualWrongAnswers, setManualWrongAnswers] = useState(false);
+  const [showUploader, setShowUploader] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
 
   // Reset form when dialog opens/closes or question changes
   useEffect(() => {
@@ -295,10 +300,55 @@ function QuestionFormDialog({
           {/* Image (optional) */}
           <div className="space-y-2">
             <Label>Image (optionnel)</Label>
-            <ImageUploader
-              value={questionData.image_url || ''}
-              onChange={(url) => updateField('image_url', url)}
-              maxSizeKB={50}
+            {questionData.image_url ? (
+              <div className="relative inline-block">
+                <img
+                  src={questionData.image_url}
+                  alt="Question"
+                  className="w-40 h-28 object-cover rounded-lg border"
+                />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  className="absolute -top-2 -right-2 h-6 w-6"
+                  onClick={() => updateField('image_url', '')}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : showUploader ? (
+              <div className="space-y-2">
+                <ImageUploader
+                  value=""
+                  onChange={(url) => {
+                    updateField('image_url', url);
+                    setShowUploader(false);
+                  }}
+                  maxSizeKB={50}
+                />
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowUploader(false)}>
+                  Annuler
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowUploader(true)}>
+                  <Upload className="h-4 w-4 mr-1" />
+                  Importer
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowGallery(true)}>
+                  <Image className="h-4 w-4 mr-1" />
+                  Galerie
+                </Button>
+              </div>
+            )}
+            <GalleryPicker
+              open={showGallery}
+              onOpenChange={setShowGallery}
+              onSelect={(url) => updateField('image_url', url)}
+              bucket="quiz-images"
+              folder="jeu"
             />
           </div>
 

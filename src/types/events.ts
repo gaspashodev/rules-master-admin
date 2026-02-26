@@ -40,6 +40,7 @@ export interface EventsFilters {
   search?: string;
   dateFrom?: string;
   dateTo?: string;
+  upcomingOnly?: boolean;
   page?: number;
   pageSize?: number;
 }

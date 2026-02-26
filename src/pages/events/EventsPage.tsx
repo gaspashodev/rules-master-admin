@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, Search, Eye, Crown, Users, MessageCircle, Loader2 } from 'lucide-react';
+import { CalendarDays, Search, Eye, Crown, Users, MessageCircle, Loader2, History } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ export function EventsPage() {
   const [page, setPage] = useState(0);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [upcomingOnly, setUpcomingOnly] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'discussion'>('details');
 
@@ -35,6 +36,7 @@ export function EventsPage() {
     pageSize: PAGE_SIZE,
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
+    upcomingOnly,
   });
 
   const {
@@ -105,6 +107,15 @@ export function EventsPage() {
                 className="w-auto"
               />
             </div>
+            <Button
+              variant={upcomingOnly ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => { setUpcomingOnly(!upcomingOnly); setPage(0); }}
+              className="gap-2 whitespace-nowrap"
+            >
+              <History className="h-4 w-4" />
+              {upcomingOnly ? 'À venir' : 'Tous'}
+            </Button>
           </div>
         </CardContent>
       </Card>

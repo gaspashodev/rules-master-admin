@@ -10,9 +10,10 @@ export function useEvents(filters?: EventsFilters) {
   const search = filters?.search || '';
   const dateFrom = filters?.dateFrom;
   const dateTo = filters?.dateTo;
+  const upcomingOnly = filters?.upcomingOnly ?? true;
 
   return useQuery({
-    queryKey: ['events', 'list', { page, pageSize, search, dateFrom, dateTo }],
+    queryKey: ['events', 'list', { page, pageSize, search, dateFrom, dateTo, upcomingOnly }],
     queryFn: async (): Promise<{ data: Event[]; count: number }> => {
       let query = supabase
         .from('events')
@@ -20,11 +21,14 @@ export function useEvents(filters?: EventsFilters) {
           *,
           organiser:profiles!organiser_id(id, username),
           game:bgg_games_cache!game_id(bgg_id, name, name_fr, image_url),
-          event_participants(count)
+          event_participants!fk_event_participants_event(count)
         `, { count: 'exact' });
 
       if (search && search.length >= 2) {
         query = query.or(`title.ilike.%${search}%,city.ilike.%${search}%`);
+      }
+      if (upcomingOnly && !dateFrom) {
+        query = query.gte('starts_at', new Date().toISOString());
       }
       if (dateFrom) {
         query = query.gte('starts_at', dateFrom);
@@ -38,7 +42,10 @@ export function useEvents(filters?: EventsFilters) {
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       const { data, error, count } = await query;
-      if (error) throw error;
+      if (error) {
+        console.error('Events query error:', error);
+        throw error;
+      }
 
       // Flatten participant count from nested aggregate
       const processed = (data || []).map((event: Record<string, unknown>) => {
@@ -67,7 +74,7 @@ export function useEventParticipants(eventId: string | undefined) {
           event_id,
           user_id,
           status,
-          profile:profiles!user_id(username)
+          profile:profiles!fk_event_participants_user(username)
         `)
         .eq('event_id', eventId!);
 
@@ -92,7 +99,7 @@ export function useEventMessages(eventId: string | undefined) {
           sender_id,
           content,
           created_at,
-          sender:profiles!sender_id(username)
+          sender:profiles!fk_event_messages_sender(username)
         `)
         .eq('event_id', eventId!)
         .order('created_at', { ascending: true });

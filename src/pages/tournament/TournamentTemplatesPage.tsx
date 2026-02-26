@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Trophy, Plus, Search, Star, Trash2, Pencil, Eye,
+  Trophy, Plus, Search, Star, Trash2, Pencil, Eye, Send,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -28,11 +28,14 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Pagination } from '@/components/ui/pagination';
+import { Switch } from '@/components/ui/switch';
 import {
   useTournamentTemplates,
   useDeleteTournamentTemplate,
+  useToggleFeaturedTemplate,
+  useToggleStatusTemplate,
 } from '@/hooks/useTournamentTemplates';
-import { isDraft, type TournamentTemplate } from '@/types/tournament-templates';
+import { isDraft, type TournamentTemplate, type TournamentStatus } from '@/types/tournament-templates';
 import { BracketPreview } from './TournamentFormPage';
 
 const PAGE_SIZE = 50;
@@ -45,12 +48,16 @@ function TournamentDetailDialog({
   template,
   onEdit,
   onDelete,
+  onToggleFeatured,
+  onToggleStatus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   template: TournamentTemplate | null;
   onEdit: () => void;
   onDelete: () => void;
+  onToggleFeatured: (id: string, value: boolean) => void;
+  onToggleStatus: (id: string, status: TournamentStatus) => void;
 }) {
   if (!template) return null;
 
@@ -89,8 +96,24 @@ function TournamentDetailDialog({
               </div>
             )}
             <div>
+              <Label className="text-muted-foreground">Statut</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <Switch
+                  checked={template.status === 'published'}
+                  onCheckedChange={(checked) => onToggleStatus(template.id, checked ? 'published' : 'draft')}
+                />
+                <span className="text-sm">{template.status === 'published' ? 'Publié' : 'Brouillon'}</span>
+              </div>
+            </div>
+            <div>
               <Label className="text-muted-foreground">Mis en avant</Label>
-              <p className="font-medium">{template.is_featured ? 'Oui' : 'Non'}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <Switch
+                  checked={!!template.is_featured}
+                  onCheckedChange={(checked) => onToggleFeatured(template.id, checked)}
+                />
+                <span className="text-sm">{template.is_featured ? 'Oui' : 'Non'}</span>
+              </div>
             </div>
             {template.description && (
               <div className="col-span-3">
@@ -202,6 +225,8 @@ export function TournamentTemplatesPage() {
   });
 
   const deleteTemplate = useDeleteTournamentTemplate();
+  const toggleFeatured = useToggleFeaturedTemplate();
+  const toggleStatus = useToggleStatusTemplate();
 
   const totalPages = Math.ceil((data?.count || 0) / PAGE_SIZE);
 
@@ -224,6 +249,26 @@ export function TournamentTemplatesPage() {
     if (!selectedTemplate) return;
     deleteTemplate.mutate(selectedTemplate.id, {
       onSuccess: () => setSelectedTemplate(null),
+    });
+  };
+
+  const handleToggleFeatured = (id: string, value: boolean) => {
+    toggleFeatured.mutate({ id, is_featured: value }, {
+      onSuccess: () => {
+        if (selectedTemplate?.id === id) {
+          setSelectedTemplate({ ...selectedTemplate, is_featured: value });
+        }
+      },
+    });
+  };
+
+  const handleToggleStatus = (id: string, status: TournamentStatus) => {
+    toggleStatus.mutate({ id, status }, {
+      onSuccess: () => {
+        if (selectedTemplate?.id === id) {
+          setSelectedTemplate({ ...selectedTemplate, status });
+        }
+      },
     });
   };
 
@@ -300,6 +345,24 @@ export function TournamentTemplatesPage() {
                       <span>{new Date(t.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                     </div>
                   </div>
+                  {isDraft(t) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Publier"
+                      onClick={(e) => { e.stopPropagation(); handleToggleStatus(t.id, 'published'); }}
+                    >
+                      <Send className="h-4 w-4 text-green-600" />
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title={t.is_featured ? 'Retirer la mise en avant' : 'Mettre en avant'}
+                    onClick={(e) => { e.stopPropagation(); handleToggleFeatured(t.id, !t.is_featured); }}
+                  >
+                    <Star className={`h-4 w-4 ${t.is_featured ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedTemplate(t); }}>
                     <Eye className="h-4 w-4" />
                   </Button>
@@ -321,6 +384,8 @@ export function TournamentTemplatesPage() {
         template={selectedTemplate}
         onEdit={handleOpenEdit}
         onDelete={handleDelete}
+        onToggleFeatured={handleToggleFeatured}
+        onToggleStatus={handleToggleStatus}
       />
     </div>
   );

@@ -15,7 +15,11 @@
       "WebFetch(domain:api.pokemontcg.io)",
       "Bash(npx tsc:*)",
       "Bash(powershell:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(pushd \"c:\\\\Users\\\\mathi\\\\Documents\\\\Dev\\\\rules-master-web\")",
+      "Bash(npx --prefix \"c:/Users/mathi/Documents/Dev/rules-master-web\" tsc --project \"c:/Users/mathi/Documents/Dev/rules-master-web/tsconfig.json\" --noEmit)",
+      "Bash(npx --prefix \"c:/Users/mathi/Documents/Dev/rules-master-admin\" tsc --project \"c:/Users/mathi/Documents/Dev/rules-master-admin/tsconfig.json\" --noEmit)",
+      "Bash(find \"c:\\\\Users\\\\mathi\\\\Documents\\\\Dev\\\\rules-master-admin\\\\src\\\\components\\\\ui\" -name \"*.tsx\" -type f -exec basename {} ;)"
     ]
   }
 }

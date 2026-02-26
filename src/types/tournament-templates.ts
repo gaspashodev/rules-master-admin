@@ -8,6 +8,8 @@ export interface TournamentGame {
   is_custom: boolean;
 }
 
+export type TournamentStatus = 'draft' | 'published';
+
 export interface TournamentTemplate {
   id: string;
   share_code: string;
@@ -15,6 +17,7 @@ export interface TournamentTemplate {
   all_games: TournamentGame[];
   created_by: string | null;
   created_at: string;
+  status: TournamentStatus;
   // Editorial columns
   is_featured: boolean | null;
   custom_title: string | null;
@@ -24,9 +27,8 @@ export interface TournamentTemplate {
   expires_at: string | null;
 }
 
-/** A tournament is a draft when all_games has fewer entries than size */
 export function isDraft(template: TournamentTemplate): boolean {
-  return template.all_games.length < template.size;
+  return template.status === 'draft';
 }
 
 export interface TournamentTemplatesFilters {

@@ -1,19 +1,59 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import type { TournamentTemplate, TournamentTemplatesFilters, TournamentGame, TournamentSize } from '@/types/tournament-templates';
+import type { TournamentTemplate, TournamentTemplatesFilters, TournamentGame, TournamentSize, TournamentStatus } from '@/types/tournament-templates';
 
-const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+/** Compress an image to WebP, capped at maxSizeKB. */
+async function compressToWebP(file: File, maxSizeKB: number): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
 
-export async function uploadTournamentImage(file: File, folder: string): Promise<string> {
-  if (file.size > MAX_IMAGE_SIZE) {
-    throw new Error('Le fichier dépasse 2 Mo');
+  const MAX_DIM = 800;
+  let w = bitmap.width;
+  let h = bitmap.height;
+  if (w > MAX_DIM || h > MAX_DIM) {
+    const ratio = Math.min(MAX_DIM / w, MAX_DIM / h);
+    w = Math.round(w * ratio);
+    h = Math.round(h * ratio);
   }
-  const ext = file.name.split('.').pop() || 'png';
-  const path = `${folder}/${crypto.randomUUID()}.${ext}`;
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
+
+  const maxBytes = maxSizeKB * 1024;
+  let quality = 0.85;
+  let blob: Blob | null = null;
+
+  while (quality > 0.05) {
+    blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/webp', quality));
+    if (blob && blob.size <= maxBytes) break;
+    quality -= 0.05;
+  }
+
+  if (blob && blob.size > maxBytes) {
+    let scale = 0.8;
+    while (scale >= 0.3 && blob.size > maxBytes) {
+      const nw = Math.round(w * scale);
+      const nh = Math.round(h * scale);
+      const rc = document.createElement('canvas');
+      rc.width = nw;
+      rc.height = nh;
+      rc.getContext('2d')!.drawImage(canvas, 0, 0, nw, nh);
+      blob = await new Promise<Blob | null>((r) => rc.toBlob(r, 'image/webp', 0.7));
+      scale -= 0.1;
+    }
+  }
+
+  if (!blob) throw new Error('Compression échouée');
+  return blob;
+}
+
+export async function uploadTournamentImage(file: File, folder: string, maxSizeKB: number): Promise<string> {
+  const blob = await compressToWebP(file, maxSizeKB);
+  const path = `${folder}/${crypto.randomUUID()}.webp`;
   const { error } = await supabase.storage
     .from('tournament-images')
-    .upload(path, file, { upsert: false });
+    .upload(path, blob, { contentType: 'image/webp', upsert: false });
   if (error) throw error;
   const { data } = supabase.storage.from('tournament-images').getPublicUrl(path);
   return data.publicUrl;
@@ -82,6 +122,7 @@ export function useCreateTournamentTemplate() {
       share_code: string;
       size: TournamentSize;
       all_games: TournamentGame[];
+      status: TournamentStatus;
       is_featured?: boolean;
       custom_title?: string | null;
       custom_image_url?: string | null;
@@ -95,6 +136,7 @@ export function useCreateTournamentTemplate() {
           share_code: template.share_code,
           size: template.size,
           all_games: template.all_games as unknown as Record<string, unknown>[],
+          status: template.status,
           created_by: null,
           is_featured: template.is_featured ?? false,
           custom_title: template.custom_title || null,
@@ -123,6 +165,7 @@ export function useUpdateTournamentTemplate() {
       share_code?: string;
       size?: TournamentSize;
       all_games?: TournamentGame[];
+      status?: TournamentStatus;
       is_featured?: boolean;
       custom_title?: string | null;
       custom_image_url?: string | null;
@@ -134,6 +177,7 @@ export function useUpdateTournamentTemplate() {
       if (data.share_code !== undefined) updateData.share_code = data.share_code;
       if (data.size !== undefined) updateData.size = data.size;
       if (data.all_games !== undefined) updateData.all_games = data.all_games;
+      if (data.status !== undefined) updateData.status = data.status;
       if (data.is_featured !== undefined) updateData.is_featured = data.is_featured;
       if (data.custom_title !== undefined) updateData.custom_title = data.custom_title || null;
       if (data.custom_image_url !== undefined) updateData.custom_image_url = data.custom_image_url || null;
@@ -150,6 +194,44 @@ export function useUpdateTournamentTemplate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tournament-templates'] });
       toast.success('Tournoi mis à jour');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+}
+
+export function useToggleStatusTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: TournamentStatus }): Promise<void> => {
+      const { error } = await supabase
+        .from('tournament_templates')
+        .update({ status })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament-templates'] });
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+}
+
+export function useToggleFeaturedTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, is_featured }: { id: string; is_featured: boolean }): Promise<void> => {
+      const { error } = await supabase
+        .from('tournament_templates')
+        .update({ is_featured })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament-templates'] });
     },
     onError: (error: Error) => {
       toast.error(`Erreur: ${error.message}`);

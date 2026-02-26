@@ -9,7 +9,7 @@ const corsHeaders = {
 interface RequestBody {
   bgg_id: number;
   game_name: string;
-  type: 1 | 2;
+  type: 1 | 2 | 'both';
 }
 
 // Fetch game description from BGG API
@@ -45,7 +45,7 @@ async function fetchBggDescription(bggId: number): Promise<string | null> {
     }
 
     // Decode HTML entities and clean up
-    let description = descriptionMatch[1]
+    const description = descriptionMatch[1]
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
@@ -64,6 +64,56 @@ async function fetchBggDescription(bggId: number): Promise<string | null> {
     console.error('Error fetching BGG description:', error);
     return null;
   }
+}
+
+const SYSTEM_PROMPT = `Tu es un rédacteur spécialisé en jeux de société. Tu rédiges EXCLUSIVEMENT en français. Tu ne réponds JAMAIS en anglais. Tu retournes uniquement la description demandée, sans guillemets, sans commentaire, sans compteur de caractères.`;
+
+function buildPrompt(type: 1 | 2, gameName: string, englishDescription: string): string {
+  const context = englishDescription.substring(0, 500);
+
+  if (type === 1) {
+    return `Voici la description anglaise d'un jeu de société appelé "${gameName}" :
+"${context}"
+
+Rédige UNE SEULE phrase EN FRANÇAIS de 130 caractères maximum qui décrit les mécaniques et l'objectif de ce jeu.
+Contraintes :
+- Phrase complète avec articles (pas de style télégraphique)
+- Décris le but du jeu et ses mécaniques principales
+- N'écris PAS le nom du jeu dans ta réponse
+- Réponds UNIQUEMENT avec la phrase, rien d'autre`;
+  }
+
+  return `Voici la description anglaise d'un jeu de société appelé "${gameName}" :
+"${context}"
+
+Rédige UNE SEULE phrase EN FRANÇAIS de 130 caractères maximum qui décrit l'ambiance et le thème de ce jeu.
+Contraintes :
+- Phrase complète avec articles (pas de style télégraphique)
+- Décris le thème, l'univers ou l'atmosphère du jeu
+- N'écris PAS le nom du jeu dans ta réponse
+- Réponds UNIQUEMENT avec la phrase, rien d'autre`;
+}
+
+async function generateOneDescription(
+  anthropic: Anthropic,
+  type: 1 | 2,
+  gameName: string,
+  englishDescription: string
+): Promise<string> {
+  const message = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 200,
+    system: SYSTEM_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: buildPrompt(type, gameName, englishDescription),
+      },
+    ],
+  });
+
+  const textBlock = message.content.find((block) => block.type === 'text');
+  return textBlock?.text?.trim().replace(/^["«]|["»]$/g, '') || '';
 }
 
 serve(async (req) => {
@@ -92,44 +142,22 @@ serve(async (req) => {
       );
     }
 
-    // Build prompt based on type
-    const prompt = type === 1
-      ? `Décris ce jeu en français en 130 caractères MAX.
-Règles:
-- Phrase complète avec articles
-- Décris le but du jeu et ses mécaniques
-- N'écris PAS le nom "${game_name}"
-- Ne mets PAS de compteur de caractères
-- Réponds UNIQUEMENT avec la description, rien d'autre
-
-${englishDescription.substring(0, 300)}`
-      : `Autre description en français en 130 caractères MAX.
-Règles:
-- Phrase complète avec articles
-- Décris le but du jeu et ses éléments uniques
-- N'écris PAS le nom "${game_name}"
-- Ne mets PAS de compteur de caractères
-- Réponds UNIQUEMENT avec la description, rien d'autre
-
-${englishDescription.substring(0, 300)}`;
-
-    // Call Anthropic API
     const anthropic = new Anthropic();
 
-    const message = await anthropic.messages.create({
-      model: 'claude-3-5-haiku-latest',
-      max_tokens: 200,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-    });
+    // Generate both descriptions at once, or just one
+    if (type === 'both') {
+      const [description1, description2] = await Promise.all([
+        generateOneDescription(anthropic, 1, game_name, englishDescription),
+        generateOneDescription(anthropic, 2, game_name, englishDescription),
+      ]);
 
-    // Extract text from response
-    const textBlock = message.content.find((block) => block.type === 'text');
-    const description = textBlock?.text?.trim() || '';
+      return new Response(
+        JSON.stringify({ descriptions: [description1, description2] }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const description = await generateOneDescription(anthropic, type, game_name, englishDescription);
 
     return new Response(
       JSON.stringify({ description }),

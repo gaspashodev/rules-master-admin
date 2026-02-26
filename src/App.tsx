@@ -8,12 +8,16 @@ import { BggQuestionsPage } from './pages/quiz/BggQuestionsPage';
 import { TournamentFormPage } from './pages/tournament/TournamentFormPage';
 import { AwardsPage } from './pages/quiz/AwardsPage';
 import { BggGamesPage } from './pages/quiz/BggGamesPage';
+import { FeaturedQuizzesPage } from './pages/quiz/FeaturedQuizzesPage';
 import { EventsPage } from './pages/events/EventsPage';
 import { CompetitiveMatchesPage } from './pages/competitive/CompetitiveMatchesPage';
 import { CitiesSeasonsPage } from './pages/competitive/CitiesSeasonsPage';
 import { TournamentTemplatesPage } from './pages/tournament/TournamentTemplatesPage';
 import { UsersPage } from './pages/users/UsersPage';
 import { ModerationPage } from './pages/moderation/ModerationPage';
+import { BroadcastPage } from './pages/broadcast/BroadcastPage';
+import { PollsPage } from './pages/polls/PollsPage';
+import { GalleryPage } from './pages/gallery/GalleryPage';
 
 function App() {
   return (
@@ -36,6 +40,7 @@ function App() {
           <Route path="/quiz/games" element={<BggGamesPage />} />
           <Route path="/quiz/questions" element={<BggQuestionsPage />} />
           <Route path="/quiz/awards" element={<AwardsPage />} />
+          <Route path="/quiz/featured" element={<FeaturedQuizzesPage />} />
           {/* Events routes */}
           <Route path="/events" element={<EventsPage />} />
           {/* Competitive routes */}
@@ -49,6 +54,11 @@ function App() {
           <Route path="/users" element={<UsersPage />} />
           {/* Moderation routes */}
           <Route path="/moderation" element={<ModerationPage />} />
+          {/* Gallery */}
+          <Route path="/gallery" element={<GalleryPage />} />
+          {/* Content routes */}
+          <Route path="/broadcast" element={<BroadcastPage />} />
+          <Route path="/polls" element={<PollsPage />} />
         </Route>
       </Routes>
     </AuthProvider>
