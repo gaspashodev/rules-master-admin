@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Search, ShieldAlert, Ban, SendHorizonal, RotateCcw, Loader2 } from 'lucide-react';
+import { Users, Search, ShieldAlert, Ban, SendHorizonal, RotateCcw, Loader2, BadgeCheck } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useUsers, useAdminMessages, useSendDirectMessage, useUpdateReliabilityScore, useBanUser, useUnbanUser } from '@/hooks/useUsers';
+import { useUsers, useAdminMessages, useSendDirectMessage, useUpdateReliabilityScore, useBanUser, useUnbanUser, useToggleCertified } from '@/hooks/useUsers';
 import { useSeasons } from '@/hooks/useCitiesSeasons';
 import { useResetPlayerSeasonPv } from '@/hooks/useCompetitive';
 import type { UserProfile } from '@/types/users';
@@ -109,6 +109,12 @@ export function UsersPage() {
                       <Badge variant={getReliabilityVariant(user.reliability_score)}>
                         Fiabilité: {user.reliability_score}
                       </Badge>
+                      {user.is_certified && (
+                        <Badge variant="default" className="gap-1 bg-blue-500">
+                          <BadgeCheck className="h-3 w-3" />
+                          Certifié
+                        </Badge>
+                      )}
                       {user.is_banned && (
                         <Badge variant="destructive" className="gap-1">
                           <Ban className="h-3 w-3" />
@@ -152,6 +158,7 @@ function UserDetailDialog({
 
   const sendMessage = useSendDirectMessage();
   const updateReliability = useUpdateReliabilityScore();
+  const toggleCertified = useToggleCertified();
   const banUser = useBanUser();
   const unbanUser = useUnbanUser();
   const resetPv = useResetPlayerSeasonPv();
@@ -259,6 +266,18 @@ function UserDetailDialog({
                   </Badge>
                 ) : (
                   <Badge variant="success">Actif</Badge>
+                )}
+              </p>
+            </div>
+            <div>
+              <Label className="text-muted-foreground">Certification</Label>
+              <p className="font-medium">
+                {user.is_certified ? (
+                  <Badge variant="default" className="gap-1 bg-blue-500">
+                    <BadgeCheck className="h-3 w-3" /> Certifié
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">Non certifié</Badge>
                 )}
               </p>
             </div>
@@ -421,6 +440,37 @@ function UserDetailDialog({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Certification */}
+          <div>
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <BadgeCheck className="h-4 w-4" />
+              Certification
+            </h3>
+            <div className="flex items-center gap-3">
+              <Badge variant={user.is_certified ? 'default' : 'outline'} className={user.is_certified ? 'bg-blue-500' : ''}>
+                {user.is_certified ? 'Certifié' : 'Non certifié'}
+              </Badge>
+              <Button
+                size="sm"
+                variant={user.is_certified ? 'outline' : 'default'}
+                className={!user.is_certified ? 'bg-blue-500 hover:bg-blue-600' : ''}
+                disabled={toggleCertified.isPending}
+                onClick={() => {
+                  const newValue = !user.is_certified;
+                  toggleCertified.mutate(
+                    { userId: user.id, certified: newValue },
+                    { onSuccess: () => onUserUpdated({ ...user, is_certified: newValue }) }
+                  );
+                }}
+              >
+                {toggleCertified.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                {user.is_certified ? 'Retirer la certification' : 'Certifier le joueur'}
+              </Button>
             </div>
           </div>
 

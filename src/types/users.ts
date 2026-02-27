@@ -4,6 +4,7 @@ export interface UserProfile {
   role: string;
   reliability_score: number;
   is_banned: boolean;
+  is_certified: boolean;
   created_at: string;
 }
 

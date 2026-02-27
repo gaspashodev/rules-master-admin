@@ -13,7 +13,7 @@ export function useUsers(filters?: UsersFilters) {
     queryFn: async (): Promise<UserProfile[]> => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, role, reliability_score, is_banned, created_at')
+        .select('id, username, role, reliability_score, is_banned, is_certified, created_at')
         .ilike('username', `%${search}%`)
         .order('created_at', { ascending: false })
         .limit(20);
@@ -33,7 +33,7 @@ export function useUserProfile(userId: string | undefined) {
     queryFn: async (): Promise<UserProfile> => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, role, reliability_score, is_banned, created_at')
+        .select('id, username, role, reliability_score, is_banned, is_certified, created_at')
         .eq('id', userId!)
         .single();
       if (error) throw error;
@@ -133,6 +133,28 @@ export function useUpdateReliabilityScore() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       toast.success('Score de fiabilité mis à jour');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+}
+
+// ============ CERTIFY / UNCERTIFY ============
+
+export function useToggleCertified() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, certified }: { userId: string; certified: boolean }): Promise<void> => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_certified: certified })
+        .eq('id', userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success('Certification mise à jour');
     },
     onError: (error: Error) => {
       toast.error(`Erreur: ${error.message}`);
