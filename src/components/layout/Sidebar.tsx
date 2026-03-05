@@ -19,6 +19,8 @@ import {
   Image,
   type LucideIcon,
 } from 'lucide-react';
+import { usePendingQuizzesCount } from '@/hooks/useFeaturedQuizzes';
+import { usePendingModerationCount } from '@/hooks/useModeration';
 
 /* ── Navigation data ──────────────────────────────────────────── */
 
@@ -33,6 +35,7 @@ interface NavSection {
   icon: LucideIcon;
   href?: string;         // direct link if no children
   children?: NavChild[];
+  badgeKey?: string;     // key to match with notification counts
 }
 
 const NAV_SECTIONS: NavSection[] = [
@@ -49,6 +52,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Quiz BGG',
     icon: ListTodo,
+    badgeKey: 'quiz',
     children: [
       { name: 'Toutes les questions', href: '/quiz/questions', icon: ListTodo },
       { name: 'Quizzes perso.', href: '/quiz/featured', icon: Star },
@@ -82,6 +86,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Modération',
     icon: ShieldAlert,
     href: '/moderation',
+    badgeKey: 'moderation',
   },
   {
     label: 'Galerie',
@@ -103,10 +108,28 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+/* ── Notification badge ──────────────────────────────────────── */
+
+function NotifBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-bold text-destructive-foreground">
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
 /* ── Sidebar ──────────────────────────────────────────────────── */
 
 export function Sidebar() {
   const location = useLocation();
+  const { data: quizCount } = usePendingQuizzesCount();
+  const { data: moderationCount } = usePendingModerationCount();
+
+  const badgeCounts: Record<string, number> = {
+    quiz: quizCount || 0,
+    moderation: moderationCount || 0,
+  };
 
   return (
     <div className="flex h-full w-full flex-col bg-card border-r">
@@ -125,9 +148,19 @@ export function Sidebar() {
       <nav className="flex-1 space-y-0.5 p-3 overflow-y-auto">
         {NAV_SECTIONS.map((section) =>
           section.children ? (
-            <FlyoutItem key={section.label} section={section} pathname={location.pathname} />
+            <FlyoutItem
+              key={section.label}
+              section={section}
+              pathname={location.pathname}
+              badgeCount={section.badgeKey ? badgeCounts[section.badgeKey] : 0}
+            />
           ) : (
-            <DirectLink key={section.label} section={section} pathname={location.pathname} />
+            <DirectLink
+              key={section.label}
+              section={section}
+              pathname={location.pathname}
+              badgeCount={section.badgeKey ? badgeCounts[section.badgeKey] : 0}
+            />
           ),
         )}
       </nav>
@@ -137,7 +170,7 @@ export function Sidebar() {
 
 /* ── Direct link (no children) ────────────────────────────────── */
 
-function DirectLink({ section, pathname }: { section: NavSection; pathname: string }) {
+function DirectLink({ section, pathname, badgeCount = 0 }: { section: NavSection; pathname: string; badgeCount?: number }) {
   const isActive =
     pathname === section.href ||
     (section.href !== '/' && section.href && pathname.startsWith(section.href));
@@ -154,13 +187,14 @@ function DirectLink({ section, pathname }: { section: NavSection; pathname: stri
     >
       <section.icon className="h-4.5 w-4.5" />
       {section.label}
+      <NotifBadge count={badgeCount} />
     </Link>
   );
 }
 
 /* ── Expandable item (children revealed on hover) ─────────────── */
 
-function FlyoutItem({ section, pathname }: { section: NavSection; pathname: string }) {
+function FlyoutItem({ section, pathname, badgeCount = 0 }: { section: NavSection; pathname: string; badgeCount?: number }) {
   const [open, setOpen] = useState(false);
 
   const isChildActive = section.children?.some(
@@ -183,6 +217,7 @@ function FlyoutItem({ section, pathname }: { section: NavSection; pathname: stri
       >
         <section.icon className="h-4.5 w-4.5" />
         {section.label}
+        <NotifBadge count={badgeCount} />
         <svg
           className={cn('ml-auto h-3.5 w-3.5 transition-transform duration-200', open && 'rotate-90')}
           fill="none"

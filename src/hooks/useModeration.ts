@@ -341,3 +341,28 @@ export function useResolveReport() {
     },
   });
 }
+
+// ============ PENDING MODERATION COUNT ============
+
+export function usePendingModerationCount() {
+  return useQuery({
+    queryKey: ['moderation', 'pending-count'],
+    queryFn: async (): Promise<number> => {
+      const [contestations, reports] = await Promise.all([
+        supabase
+          .from('match_contestations')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending'),
+        supabase
+          .from('player_reports')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending'),
+      ]);
+
+      if (contestations.error) throw contestations.error;
+      if (reports.error) throw reports.error;
+
+      return (contestations.count || 0) + (reports.count || 0);
+    },
+  });
+}

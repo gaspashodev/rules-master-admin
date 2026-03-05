@@ -37,13 +37,16 @@ export function BggGameSearch({
   const { data: games, isLoading } = useSearchBggGames(searchTerm);
   const fetchBggData = useFetchBggData();
 
-  // Calculate dropdown position relative to viewport
+  // Calculate dropdown position, offsetting by dialog position when inside one
   const updateDropdownPos = useCallback(() => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
+      const dialog = containerRef.current.closest('[role="dialog"]');
+      const offsetTop = dialog ? dialog.getBoundingClientRect().top : 0;
+      const offsetLeft = dialog ? dialog.getBoundingClientRect().left : 0;
       setDropdownPos({
-        top: rect.bottom + 4,
-        left: rect.left,
+        top: rect.bottom + 4 - offsetTop,
+        left: rect.left - offsetLeft,
         width: rect.width,
       });
     }
@@ -170,7 +173,7 @@ export function BggGameSearch({
         )}
       </div>
 
-      {/* Dropdown results — portaled to body to escape overflow clipping */}
+      {/* Dropdown results — portaled to nearest dialog (to stay within Radix modal) or body */}
       {showDropdown && createPortal(
         <div
           ref={dropdownRef}
@@ -280,7 +283,7 @@ export function BggGameSearch({
             </div>
           )}
         </div>,
-        document.body
+        containerRef.current?.closest('[role="dialog"]') || document.body
       )}
     </div>
   );
