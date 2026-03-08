@@ -116,3 +116,145 @@ export function useCompleteSeason() {
     },
   });
 }
+
+// ============ UPDATE SEASON END DATE ============
+
+export function useUpdateSeasonEndDate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      seasonId,
+      endsAt,
+      broadcastMessage,
+    }: {
+      seasonId: string;
+      endsAt: string;
+      broadcastMessage?: string;
+    }): Promise<void> => {
+      const { data: updatedSeason, error } = await supabase
+        .from('seasons')
+        .update({ ends_at: endsAt })
+        .eq('id', seasonId)
+        .select('id');
+      if (error) throw error;
+      if (!updatedSeason || updatedSeason.length === 0) throw new Error('Impossible de modifier la date de fin (permissions insuffisantes ou saison introuvable)');
+
+      if (broadcastMessage?.trim()) {
+        // Fetch all participants of this season (via competitive_matches)
+        const { data: season } = await supabase
+          .from('seasons')
+          .select('starts_at, ends_at')
+          .eq('id', seasonId)
+          .single();
+
+        if (season) {
+          const { data: participants } = await supabase
+            .from('competitive_matches')
+            .select('competitive_match_participants!inner(user_id)')
+            .gte('started_at', season.starts_at)
+            .lte('started_at', endsAt)
+            .neq('status', 'cancelled');
+
+          if (participants) {
+            const userIds = [...new Set(
+              participants.flatMap((m: Record<string, unknown>) => {
+                const parts = m.competitive_match_participants as { user_id: string }[];
+                return parts?.map(p => p.user_id) || [];
+              })
+            )];
+
+            const messages = userIds.map(userId => ({
+              sender_id: null as null,
+              recipient_id: userId,
+              content: broadcastMessage.trim(),
+            }));
+
+            if (messages.length > 0) {
+              await supabase.from('direct_messages').insert(messages);
+            }
+          }
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seasons'] });
+      toast.success('Date de fin mise à jour');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+}
+
+// ============ CREATE SEASON ============
+
+export interface CreateSeasonData {
+  season_number: number;
+  starts_at: string;
+  ends_at: string;
+  status: 'upcoming' | 'active';
+}
+
+export function useCreateSeason() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: CreateSeasonData): Promise<void> => {
+      const { error } = await supabase
+        .from('seasons')
+        .insert(data);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seasons'] });
+      toast.success('Saison créée');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+}
+
+// ============ SEASON STATS (implications before closing) ============
+
+export interface SeasonStats {
+  completed_matches: number;
+  active_matches: number;
+  total_players: number;
+}
+
+export function useSeasonStats(season: Season | undefined) {
+  return useQuery({
+    queryKey: ['seasons', 'stats', season?.id],
+    queryFn: async (): Promise<SeasonStats> => {
+      const [completed, active] = await Promise.all([
+        supabase
+          .from('competitive_matches')
+          .select('id, competitive_match_participants!inner(user_id)', { count: 'exact' })
+          .gte('started_at', season!.starts_at)
+          .lte('started_at', season!.ends_at)
+          .eq('status', 'completed'),
+        supabase
+          .from('competitive_matches')
+          .select('id', { count: 'exact' })
+          .gte('started_at', season!.starts_at)
+          .lte('started_at', season!.ends_at)
+          .in('status', ['pending', 'in_progress']),
+      ]);
+
+      const completedData = completed.data || [];
+      const allUserIds = new Set(
+        completedData.flatMap((m: Record<string, unknown>) => {
+          const parts = m.competitive_match_participants as { user_id: string }[];
+          return parts?.map(p => p.user_id) || [];
+        })
+      );
+
+      return {
+        completed_matches: completed.count || 0,
+        active_matches: active.count || 0,
+        total_players: allUserIds.size,
+      };
+    },
+    enabled: !!season,
+  });
+}

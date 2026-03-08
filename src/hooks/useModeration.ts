@@ -25,10 +25,6 @@ export function useContestations(filters?: ModerationFilters) {
           contestant:profiles!user_id(username)
         `, { count: 'exact' });
 
-      if (status && status !== 'all') {
-        query = query.eq('status', status);
-      }
-
       query = query
         .order('created_at', { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
@@ -156,15 +152,17 @@ export function useResolveContestation() {
       }
 
       // Update contestation status
-      const { error } = await supabase
+      const { data: updatedContestation, error } = await supabase
         .from('match_contestations')
         .update({
           status: resolution,
           admin_note: adminNote || null,
           resolved_at: new Date().toISOString(),
         })
-        .eq('id', contestationId);
+        .eq('id', contestationId)
+        .select('id');
       if (error) throw error;
+      if (!updatedContestation || updatedContestation.length === 0) throw new Error('Impossible de mettre à jour la contestation (permissions insuffisantes)');
 
       // Send personalized message to each participant
       if (playerMessage) {
@@ -228,10 +226,6 @@ export function usePlayerReports(filters?: ModerationFilters) {
           reported_user:profiles!reported_user_id(username),
           reporter:profiles!reporter_id(username)
         `, { count: 'exact' });
-
-      if (status && status !== 'all') {
-        query = query.eq('status', status);
-      }
 
       query = query
         .order('created_at', { ascending: false })
@@ -316,15 +310,17 @@ export function useResolveReport() {
       }
 
       // Update report status
-      const { error } = await supabase
+      const { data: updatedReport, error } = await supabase
         .from('player_reports')
         .update({
           status: resolution,
           admin_note: adminNote || null,
           resolved_at: new Date().toISOString(),
         })
-        .eq('id', reportId);
+        .eq('id', reportId)
+        .select('id');
       if (error) throw error;
+      if (!updatedReport || updatedReport.length === 0) throw new Error('Impossible de mettre à jour le signalement (permissions insuffisantes)');
 
       // Send message to reported user
       if (playerMessage) {
@@ -351,12 +347,10 @@ export function usePendingModerationCount() {
       const [contestations, reports] = await Promise.all([
         supabase
           .from('match_contestations')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending'),
+          .select('id', { count: 'exact' }),
         supabase
           .from('player_reports')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending'),
+          .select('id', { count: 'exact' }),
       ]);
 
       if (contestations.error) throw contestations.error;

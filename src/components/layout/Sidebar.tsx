@@ -17,6 +17,8 @@ import {
   Megaphone,
   Vote,
   Image,
+  Crown,
+  Calendar,
   type LucideIcon,
 } from 'lucide-react';
 import { usePendingQuizzesCount } from '@/hooks/useFeaturedQuizzes';
@@ -69,7 +71,9 @@ const NAV_SECTIONS: NavSection[] = [
     icon: Swords,
     children: [
       { name: 'Matchs compétitifs', href: '/competitive/matches', icon: Swords },
-      { name: 'Villes & Saisons', href: '/competitive/cities-seasons', icon: MapPin },
+      { name: 'Villes', href: '/competitive/cities', icon: MapPin },
+      { name: 'Saisons', href: '/competitive/seasons', icon: Calendar },
+      { name: 'Champions', href: '/competitive/champions', icon: Crown },
     ],
   },
   {

@@ -12,6 +12,9 @@ import { FeaturedQuizzesPage } from './pages/quiz/FeaturedQuizzesPage';
 import { EventsPage } from './pages/events/EventsPage';
 import { CompetitiveMatchesPage } from './pages/competitive/CompetitiveMatchesPage';
 import { CitiesSeasonsPage } from './pages/competitive/CitiesSeasonsPage';
+import { CitiesPage } from './pages/competitive/CitiesPage';
+import { SeasonsPage } from './pages/competitive/SeasonsPage';
+import { ChampionsPage } from './pages/competitive/ChampionsPage';
 import { TournamentTemplatesPage } from './pages/tournament/TournamentTemplatesPage';
 import { UsersPage } from './pages/users/UsersPage';
 import { ModerationPage } from './pages/moderation/ModerationPage';
@@ -46,6 +49,9 @@ function App() {
           {/* Competitive routes */}
           <Route path="/competitive/matches" element={<CompetitiveMatchesPage />} />
           <Route path="/competitive/cities-seasons" element={<CitiesSeasonsPage />} />
+          <Route path="/competitive/cities" element={<CitiesPage />} />
+          <Route path="/competitive/seasons" element={<SeasonsPage />} />
+          <Route path="/competitive/champions" element={<ChampionsPage />} />
           {/* Tournament routes */}
           <Route path="/tournament/templates" element={<TournamentTemplatesPage />} />
           <Route path="/tournament/templates/new" element={<TournamentFormPage />} />
