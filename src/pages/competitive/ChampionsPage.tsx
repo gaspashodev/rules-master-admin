@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Crown, CheckCircle2, Circle, AlertTriangle, Loader2, Play, RefreshCw, Trophy } from 'lucide-react';
+import { Crown, CheckCircle2, Circle, AlertTriangle, Loader2, Play, RefreshCw, Trophy, Globe } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,16 +25,16 @@ import {
 import { useSeasons } from '@/hooks/useCitiesSeasons';
 import {
   useAwardSeasonChampions,
-  useRecentChampionAchievements,
+  useSeasonChampions,
   useCompleteSeasonForChampions,
   type ChampionResult,
 } from '@/hooks/useChampions';
 import { SEASON_STATUS_CONFIG } from '@/types/cities-seasons';
 
-const TIER_CONFIG: Record<number, { label: string; badge: string; className: string }> = {
-  1: { label: 'Bronze', badge: '🥉', className: 'text-amber-700 bg-amber-100 border-amber-300' },
-  2: { label: 'Argent', badge: '🥈', className: 'text-slate-600 bg-slate-100 border-slate-300' },
-  3: { label: 'Or', badge: '🥇', className: 'text-yellow-600 bg-yellow-100 border-yellow-300' },
+const TIER_CONFIG: Record<number, { label: string; badge: string; className: string; desc: string }> = {
+  1: { label: 'Bronze', badge: '🥉', className: 'text-amber-700 bg-amber-100 border-amber-300', desc: '≥30 joueurs & ≥90 parties' },
+  2: { label: 'Argent', badge: '🥈', className: 'text-slate-600 bg-slate-100 border-slate-300', desc: '≥100 joueurs & ≥300 parties' },
+  3: { label: 'Or', badge: '🥇', className: 'text-yellow-600 bg-yellow-100 border-yellow-300', desc: '≥250 joueurs & ≥750 parties' },
 };
 
 function StepIndicator({ step, current, label, done }: { step: number; current: number; label: string; done: boolean }) {
@@ -52,15 +52,72 @@ function StepIndicator({ step, current, label, done }: { step: number; current: 
   );
 }
 
+function ResultsTable({ results }: { results: ChampionResult[] }) {
+  if (results.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-amber-500" />
+        Aucune ville n'avait suffisamment de joueurs éligibles cette saison.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        {results.length} ville{results.length > 1 ? 's' : ''} couronnée{results.length > 1 ? 's' : ''}
+      </p>
+      <div className="rounded-md border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="text-left px-4 py-2 font-medium text-muted-foreground">Ville</th>
+              <th className="text-left px-4 py-2 font-medium text-muted-foreground">Champion</th>
+              <th className="text-left px-4 py-2 font-medium text-muted-foreground">Palier</th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((r, i) => {
+              const tier = TIER_CONFIG[r.tier_awarded];
+              return (
+                <tr key={i} className="border-t">
+                  <td className="px-4 py-2 font-medium">
+                    <span className="flex items-center gap-1.5">
+                      {r.is_global && <Globe className="h-3.5 w-3.5 text-yellow-500" title="Champion global" />}
+                      {r.city_name}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2">{r.champion_username}</td>
+                  <td className="px-4 py-2">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${tier?.className}`}>
+                      {tier?.badge} {tier?.label ?? `Palier ${r.tier_awarded}`}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap gap-3 pt-1">
+        {Object.entries(TIER_CONFIG).map(([key, t]) => (
+          <span key={key} className="text-xs text-muted-foreground">{t.badge} {t.label} : {t.desc}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ChampionsPage() {
   const [selectedSeasonId, setSelectedSeasonId] = useState<string>('');
   const [step, setStep] = useState(1);
-  const [results, setResults] = useState<ChampionResult[] | null>(null);
+  const [rpcResults, setRpcResults] = useState<ChampionResult[] | null>(null);
 
   const { data: seasons } = useSeasons();
   const completeSeason = useCompleteSeasonForChampions();
   const awardChampions = useAwardSeasonChampions();
-  const { data: recentAchievements, refetch: refetchAchievements, isFetching: isFetchingAchievements } = useRecentChampionAchievements();
+  const { data: storedChampions, refetch: refetchStored, isFetching } = useSeasonChampions(
+    step >= 3 && rpcResults === null ? selectedSeasonId : undefined
+  );
 
   const selectedSeason = seasons?.find(s => s.id === selectedSeasonId);
 
@@ -72,26 +129,25 @@ export function ChampionsPage() {
 
   const handleAwardChampions = async () => {
     const data = await awardChampions.mutateAsync(selectedSeasonId);
-    setResults(data);
+    setRpcResults(data);
     setStep(4);
-    refetchAchievements();
   };
 
   const handleReset = () => {
     setStep(1);
     setSelectedSeasonId('');
-    setResults(null);
+    setRpcResults(null);
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-3">
             <Crown className="h-7 w-7 text-yellow-500" />
-            Attribution des Champions
+            Champions
           </h1>
-          <p className="text-muted-foreground">Clôture de saison — Attribution manuelle des succès CHAMPION</p>
+          <p className="text-muted-foreground">Clôture de saison — Attribution des succès CHAMPION</p>
         </div>
         {step > 1 && (
           <Button variant="outline" size="sm" onClick={handleReset}>
@@ -113,7 +169,7 @@ export function ChampionsPage() {
         </CardContent>
       </Card>
 
-      {/* ÉTAPE 1 — Sélection de la saison */}
+      {/* ÉTAPE 1 — Sélection */}
       <Card className={step !== 1 ? 'opacity-60' : ''}>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -141,10 +197,11 @@ export function ChampionsPage() {
           </Select>
 
           {selectedSeason && (
-            <div className="text-sm text-muted-foreground space-y-0.5">
-              <p>Du {new Date(selectedSeason.starts_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-              <p>Au {new Date(selectedSeason.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Du {new Date(selectedSeason.starts_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              {' — '}
+              Au {new Date(selectedSeason.ends_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
           )}
 
           {step === 1 && (
@@ -165,7 +222,7 @@ export function ChampionsPage() {
         </CardContent>
       </Card>
 
-      {/* ÉTAPE 2 — Clôturer la saison */}
+      {/* ÉTAPE 2 — Clôturer */}
       {step >= 2 && (
         <Card className={step !== 2 ? 'opacity-60' : ''}>
           <CardHeader>
@@ -177,43 +234,35 @@ export function ChampionsPage() {
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
               La saison doit être passée en <code className="bg-muted px-1 rounded text-xs">completed</code> avant d'attribuer les champions.
-              Cette opération est irréversible.
             </p>
             {step === 2 && (
-              <div className="flex items-center gap-2">
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button disabled={completeSeason.isPending}>
-                      {completeSeason.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                      Clôturer la saison {selectedSeason?.season_number}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Clôturer la saison {selectedSeason?.season_number} ?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        La saison sera marquée comme terminée (<code>status = 'completed'</code>).
-                        Cette action ne peut pas être annulée via cette interface.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Annuler</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleCompleteSeason}>
-                        Confirmer la clôture
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button disabled={completeSeason.isPending}>
+                    {completeSeason.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    Clôturer la saison {selectedSeason?.season_number}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Clôturer la saison {selectedSeason?.season_number} ?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      La saison sera marquée comme terminée. Cette action ne peut pas être annulée via cette interface.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleCompleteSeason}>Confirmer la clôture</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
-            {step > 2 && (
-              <Badge variant="success">Saison {selectedSeason?.season_number} clôturée</Badge>
-            )}
+            {step > 2 && <Badge variant="success">Saison {selectedSeason?.season_number} clôturée</Badge>}
           </CardContent>
         </Card>
       )}
 
-      {/* ÉTAPE 3 — Attribuer les champions */}
+      {/* ÉTAPE 3 — Attribuer */}
       {step >= 3 && (
         <Card className={step !== 3 ? 'opacity-60' : ''}>
           <CardHeader>
@@ -224,18 +273,14 @@ export function ChampionsPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Appelle la fonction SQL <code className="bg-muted px-1 rounded text-xs">award_season_champions</code>.
-              L'opération est idempotente : relancer ne crée pas de doublons.
+              Appelle la fonction <code className="bg-muted px-1 rounded text-xs">award_season_champions</code>.
+              L'opération est idempotente — relancer ne crée pas de doublons.
             </p>
             {step === 3 && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button disabled={awardChampions.isPending} className="gap-2">
-                    {awardChampions.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Play className="h-4 w-4" />
-                    )}
+                    {awardChampions.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                     Lancer l'attribution
                   </Button>
                 </AlertDialogTrigger>
@@ -243,14 +288,12 @@ export function ChampionsPage() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Attribuer les champions ?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      La fonction <code>award_season_champions</code> va analyser toutes les villes de la saison {selectedSeason?.season_number} et attribuer les succès CHAMPION aux joueurs éligibles.
+                      La fonction va analyser toutes les villes actives de la saison {selectedSeason?.season_number} et attribuer les succès CHAMPION aux joueurs éligibles (≥3 jeux distincts, meilleur score par ville).
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Annuler</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleAwardChampions}>
-                      Confirmer
-                    </AlertDialogAction>
+                    <AlertDialogAction onClick={handleAwardChampions}>Confirmer</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
@@ -260,7 +303,7 @@ export function ChampionsPage() {
       )}
 
       {/* ÉTAPE 4 — Résultats */}
-      {step >= 4 && results !== null && (
+      {step >= 4 && rpcResults !== null && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -268,17 +311,22 @@ export function ChampionsPage() {
               Résultats de l'attribution
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            {results.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
-                Aucune ville n'avait suffisamment de joueurs éligibles cette saison.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground mb-3">
-                  {results.length} ville{results.length > 1 ? 's' : ''} traitée{results.length > 1 ? 's' : ''}
-                </p>
+          <CardContent className="space-y-4">
+            <ResultsTable results={rpcResults} />
+
+            <Separator />
+
+            {/* Vérification depuis la table */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold">Vérification — Champions enregistrés en base</h4>
+                <Button variant="ghost" size="sm" onClick={() => refetchStored()} disabled={isFetching}>
+                  {isFetching ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                </Button>
+              </div>
+              {!storedChampions?.length ? (
+                <p className="text-sm text-muted-foreground">Chargement...</p>
+              ) : (
                 <div className="rounded-md border overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50">
@@ -286,65 +334,27 @@ export function ChampionsPage() {
                         <th className="text-left px-4 py-2 font-medium text-muted-foreground">Ville</th>
                         <th className="text-left px-4 py-2 font-medium text-muted-foreground">Champion</th>
                         <th className="text-left px-4 py-2 font-medium text-muted-foreground">Palier</th>
+                        <th className="text-left px-4 py-2 font-medium text-muted-foreground">PV</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {results.map((r, i) => {
-                        const tier = TIER_CONFIG[r.tier_awarded];
+                      {storedChampions.map((c) => {
+                        const tier = TIER_CONFIG[c.tier_awarded];
                         return (
-                          <tr key={i} className="border-t">
-                            <td className="px-4 py-2 font-medium">{r.city_name}</td>
-                            <td className="px-4 py-2">{r.champion_username}</td>
-                            <td className="px-4 py-2">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${tier?.className}`}>
-                                {tier?.badge} {tier?.label ?? `Palier ${r.tier_awarded}`}
+                          <tr key={c.id} className="border-t">
+                            <td className="px-4 py-2 font-medium">
+                              <span className="flex items-center gap-1.5">
+                                {c.is_global_champion && <Globe className="h-3.5 w-3.5 text-yellow-500" title="Champion global" />}
+                                {c.city?.name ?? <span className="text-muted-foreground italic">Inconnue</span>}
                               </span>
                             </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            <Separator className="my-4" />
-
-            {/* Vérification post-appel */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold">Vérification — 20 dernières attributions</h4>
-                <Button variant="ghost" size="sm" onClick={() => refetchAchievements()} disabled={isFetchingAchievements}>
-                  {isFetchingAchievements ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                </Button>
-              </div>
-              {!recentAchievements?.length ? (
-                <p className="text-sm text-muted-foreground">Aucune attribution trouvée.</p>
-              ) : (
-                <div className="rounded-md border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="text-left px-4 py-2 font-medium text-muted-foreground">Joueur</th>
-                        <th className="text-left px-4 py-2 font-medium text-muted-foreground">Palier</th>
-                        <th className="text-left px-4 py-2 font-medium text-muted-foreground">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentAchievements.map((a, i) => {
-                        const tier = TIER_CONFIG[a.tier];
-                        return (
-                          <tr key={i} className="border-t">
-                            <td className="px-4 py-2">{a.username ?? <span className="text-muted-foreground italic">Inconnu</span>}</td>
+                            <td className="px-4 py-2">{c.champion?.username ?? <span className="text-muted-foreground italic">Inconnu</span>}</td>
                             <td className="px-4 py-2">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${tier?.className}`}>
-                                {tier?.badge} {tier?.label ?? `Palier ${a.tier}`}
+                                {tier?.badge} {tier?.label ?? `Palier ${c.tier_awarded}`}
                               </span>
                             </td>
-                            <td className="px-4 py-2 text-muted-foreground">
-                              {new Date(a.earned_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </td>
+                            <td className="px-4 py-2 text-muted-foreground">{c.elo_snapshot ?? '—'}</td>
                           </tr>
                         );
                       })}

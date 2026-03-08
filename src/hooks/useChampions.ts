@@ -6,38 +6,23 @@ export interface ChampionResult {
   city_name: string;
   champion_username: string;
   tier_awarded: number;
+  is_global: boolean;
 }
 
-export interface RecentChampionAchievement {
+export interface SeasonCityChampion {
+  id: string;
+  season_id: string;
+  city_id: string;
   user_id: string;
-  username: string | null;
-  tier: number;
-  earned_at: string;
+  tier_awarded: number;
+  is_global_champion: boolean;
+  elo_snapshot: number | null;
+  created_at: string;
+  city?: { name: string } | null;
+  champion?: { username: string | null } | null;
 }
 
-// ============ CHECK FUNCTION EXISTS ============
-
-export function useCheckChampionFunction() {
-  return useQuery({
-    queryKey: ['champions', 'function-exists'],
-    queryFn: async (): Promise<boolean> => {
-      const { data, error } = await supabase
-        .from('information_schema.routines' as never)
-        .select('routine_name')
-        .eq('routine_name', 'award_season_champions')
-        .maybeSingle() as unknown as { data: { routine_name: string } | null; error: unknown };
-
-      if (error) {
-        // Fallback: try via rpc call signature check
-        return false;
-      }
-      return !!data;
-    },
-    retry: false,
-  });
-}
-
-// ============ AWARD SEASON CHAMPIONS ============
+// ============ AWARD SEASON CHAMPIONS (RPC) ============
 
 export function useAwardSeasonChampions() {
   return useMutation({
@@ -54,32 +39,27 @@ export function useAwardSeasonChampions() {
   });
 }
 
-// ============ RECENT CHAMPION ACHIEVEMENTS ============
+// ============ SEASON CITY CHAMPIONS (from table) ============
 
-export function useRecentChampionAchievements() {
+export function useSeasonChampions(seasonId: string | undefined) {
   return useQuery({
-    queryKey: ['champions', 'recent-achievements'],
-    queryFn: async (): Promise<RecentChampionAchievement[]> => {
+    queryKey: ['champions', 'season', seasonId],
+    queryFn: async (): Promise<SeasonCityChampion[]> => {
       const { data, error } = await supabase
-        .from('user_achievements')
+        .from('season_city_champions')
         .select(`
-          user_id,
-          tier,
-          earned_at,
-          profile:profiles!user_id(username)
+          *,
+          city:cities!city_id(name),
+          champion:profiles!user_id(username)
         `)
-        .eq('achievement_type', 'champion')
-        .order('earned_at', { ascending: false })
-        .limit(20);
+        .eq('season_id', seasonId!)
+        .order('is_global_champion', { ascending: false })
+        .order('tier_awarded', { ascending: false });
 
       if (error) throw error;
-      return ((data || []).map((row: Record<string, unknown>) => ({
-        user_id: row.user_id as string,
-        username: (row.profile as { username: string | null } | null)?.username ?? null,
-        tier: row.tier as number,
-        earned_at: row.earned_at as string,
-      })));
+      return (data as unknown as SeasonCityChampion[]) || [];
     },
+    enabled: !!seasonId,
   });
 }
 

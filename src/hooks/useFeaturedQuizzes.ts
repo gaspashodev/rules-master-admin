@@ -37,6 +37,10 @@ export function useFeaturedQuizzes(filters?: FeaturedQuizFilters) {
         query = query.eq('category', filters.category);
       }
 
+      if (filters?.is_private !== undefined && filters.is_private !== 'all') {
+        query = query.eq('is_private', filters.is_private);
+      }
+
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as FeaturedQuiz[];

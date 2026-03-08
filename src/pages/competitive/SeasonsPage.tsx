@@ -89,10 +89,21 @@ function EditEndDateDialog({
 }) {
   const currentEnd = season.ends_at.split('T')[0];
   const [endsAt, setEndsAt] = useState(currentEnd);
-  const [message, setMessage] = useState('');
   const updateEndDate = useUpdateSeasonEndDate();
 
   const hasChanged = endsAt !== currentEnd;
+
+  const buildDefaultMessage = (date: string) => {
+    const formatted = date ? new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '...';
+    return `La date de fin de la saison ${season.season_number} a été modifiée au ${formatted}. Profitez-en pour accumuler vos points !`;
+  };
+
+  const [message, setMessage] = useState(() => buildDefaultMessage(currentEnd));
+
+  const handleDateChange = (date: string) => {
+    setEndsAt(date);
+    setMessage(buildDefaultMessage(date));
+  };
 
   const handleSubmit = () => {
     updateEndDate.mutate(
@@ -127,7 +138,7 @@ function EditEndDateDialog({
               type="date"
               value={endsAt}
               min={season.starts_at.split('T')[0]}
-              onChange={(e) => setEndsAt(e.target.value)}
+              onChange={(e) => handleDateChange(e.target.value)}
             />
           </div>
 
@@ -139,7 +150,6 @@ function EditEndDateDialog({
               </Label>
               <Textarea
                 id="message"
-                placeholder={`Ex: La date de fin de la saison ${season.season_number} a été modifiée au ${endsAt ? new Date(endsAt).toLocaleDateString('fr-FR') : '...'}. Profitez-en pour accumuler vos points !`}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={3}
@@ -174,54 +184,60 @@ function CreateSeasonDialog({
   open,
   onClose,
   nextSeasonNumber,
+  activeSeason,
 }: {
   open: boolean;
   onClose: () => void;
   nextSeasonNumber: number;
+  activeSeason: Season | undefined;
 }) {
   const today = new Date().toISOString().split('T')[0];
-  const [seasonNumber, setSeasonNumber] = useState(String(nextSeasonNumber));
   const [startsAt, setStartsAt] = useState(today);
   const [endsAt, setEndsAt] = useState('');
-  const [startNow, setStartNow] = useState(false);
-
   const createSeason = useCreateSeason();
+
+  const startsBeforeActiveEnds = activeSeason && startsAt && startsAt < activeSeason.ends_at.split('T')[0];
+  const isActiveNow = startsAt <= today;
+  const status: 'active' | 'upcoming' = isActiveNow ? 'active' : 'upcoming';
+
+  // If new season starts before active ends → active season end becomes day before new start
+  const adjustedActiveEndsAt = startsBeforeActiveEnds
+    ? (() => {
+        const d = new Date(startsAt);
+        d.setDate(d.getDate() - 1);
+        return d.toISOString().split('T')[0];
+      })()
+    : undefined;
 
   const handleSubmit = () => {
     if (!endsAt) return;
     createSeason.mutate(
       {
-        season_number: parseInt(seasonNumber),
-        starts_at: new Date(startsAt).toISOString(),
-        ends_at: new Date(endsAt).toISOString(),
-        status: startNow ? 'active' : 'upcoming',
+        data: {
+          season_number: nextSeasonNumber,
+          starts_at: new Date(startsAt).toISOString(),
+          ends_at: new Date(endsAt).toISOString(),
+          status,
+        },
+        terminateActiveSeasonId: startsBeforeActiveEnds ? activeSeason?.id : undefined,
+        adjustedActiveEndsAt: adjustedActiveEndsAt
+          ? new Date(adjustedActiveEndsAt).toISOString()
+          : undefined,
       },
       { onSuccess: onClose }
     );
   };
 
-  const isValid = endsAt && startsAt && endsAt > startsAt && parseInt(seasonNumber) > 0;
+  const isValid = endsAt && startsAt && endsAt > startsAt;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Créer une nouvelle saison</DialogTitle>
+          <DialogTitle>Créer la saison {nextSeasonNumber}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="season_number">Numéro de saison</Label>
-            <Input
-              id="season_number"
-              type="number"
-              min={1}
-              value={seasonNumber}
-              onChange={(e) => setSeasonNumber(e.target.value)}
-              className="w-32"
-            />
-          </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="starts_at">Date de début</Label>
@@ -246,40 +262,37 @@ function CreateSeasonDialog({
 
           <Separator />
 
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Statut initial</Label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setStartNow(false)}
-                className={`flex-1 rounded-lg border p-3 text-sm text-left transition-colors ${!startNow ? 'border-primary bg-primary/5 text-primary font-medium' : 'text-muted-foreground hover:bg-muted/50'}`}
-              >
-                <p className="font-medium">Programmer</p>
-                <p className="text-xs mt-0.5 opacity-70">Statut : À venir</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setStartNow(true)}
-                className={`flex-1 rounded-lg border p-3 text-sm text-left transition-colors ${startNow ? 'border-primary bg-primary/5 text-primary font-medium' : 'text-muted-foreground hover:bg-muted/50'}`}
-              >
-                <p className="font-medium">Démarrer maintenant</p>
-                <p className="text-xs mt-0.5 opacity-70">Statut : Active</p>
-              </button>
-            </div>
-            {startNow && (
-              <p className="text-xs text-amber-600 flex items-center gap-1">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Assurez-vous qu'aucune autre saison n'est déjà active.
-              </p>
-            )}
+          <div className="rounded-lg border bg-muted/30 px-4 py-3 space-y-1 text-sm">
+            <p className="font-medium">
+              Statut au démarrage :{' '}
+              <span className={status === 'active' ? 'text-green-600' : 'text-muted-foreground'}>
+                {status === 'active' ? 'Active immédiatement' : 'Programmée (à venir)'}
+              </span>
+            </p>
+            <p className="text-muted-foreground text-xs">
+              {status === 'active'
+                ? 'La date de début est aujourd\'hui ou dans le passé.'
+                : `La saison démarrera le ${startsAt ? new Date(startsAt).toLocaleDateString('fr-FR') : '...'}.`}
+            </p>
           </div>
+
+          {startsBeforeActiveEnds && adjustedActiveEndsAt && (
+            <p className="text-sm text-amber-600 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>
+                La date de début est antérieure à la fin de la saison {activeSeason?.season_number} active.
+                Celle-ci sera automatiquement clôturée et sa date de fin ajustée au{' '}
+                <strong>{new Date(adjustedActiveEndsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.
+              </span>
+            </p>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Annuler</Button>
           <Button onClick={handleSubmit} disabled={!isValid || createSeason.isPending}>
             {createSeason.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            {startNow ? 'Créer et démarrer' : 'Programmer la saison'}
+            Créer la saison {nextSeasonNumber}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -298,6 +311,7 @@ export function SeasonsPage() {
 
   const nextSeasonNumber = seasons ? Math.max(...seasons.map(s => s.season_number), 0) + 1 : 1;
   const hasActiveSeason = seasons?.some(s => s.status === 'active');
+  const activeSeason = seasons?.find(s => s.status === 'active');
 
   return (
     <div className="space-y-6">
@@ -453,6 +467,7 @@ export function SeasonsPage() {
         open={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
         nextSeasonNumber={nextSeasonNumber}
+        activeSeason={activeSeason}
       />
     </div>
   );

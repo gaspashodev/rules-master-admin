@@ -52,14 +52,18 @@ const NAV_SECTIONS: NavSection[] = [
     href: '/quiz/games',
   },
   {
-    label: 'Quiz BGG',
+    label: 'Quiz',
     icon: ListTodo,
     badgeKey: 'quiz',
     children: [
       { name: 'Toutes les questions', href: '/quiz/questions', icon: ListTodo },
-      { name: 'Quizzes perso.', href: '/quiz/featured', icon: Star },
-      { name: 'Prix & Récompenses', href: '/quiz/awards', icon: Trophy },
+      { name: 'Quiz', href: '/quiz/featured', icon: Star },
     ],
+  },
+  {
+    label: 'Prix & Récompenses',
+    icon: Trophy,
+    href: '/quiz/awards',
   },
   {
     label: 'Événements',

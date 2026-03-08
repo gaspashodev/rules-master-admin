@@ -679,7 +679,7 @@ function QuizFormDialog({
 
 export function FeaturedQuizzesPage() {
   const [tab, setTab] = useState('submissions');
-  const [filters, setFilters] = useState<FeaturedQuizFilters>({ status: 'all', search: '', is_featured: false });
+  const [filters, setFilters] = useState<FeaturedQuizFilters>({ status: 'all', search: '', is_featured: false, is_private: false });
   const [searchInput, setSearchInput] = useState('');
 
   const [formOpen, setFormOpen] = useState(false);
@@ -715,7 +715,7 @@ export function FeaturedQuizzesPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-3">
             <Star className="h-7 w-7" />
-            Quizzes personnalisés
+            Quiz
           </h1>
           <p className="text-muted-foreground">
             Gérer les quizzes soumis par les joueurs et créer des quizzes admin
@@ -842,6 +842,22 @@ export function FeaturedQuizzesPage() {
                     {QUIZ_CATEGORIES.map((cat) => (
                       <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={filters.is_private === 'all' ? 'all' : filters.is_private ? 'private' : 'public'}
+                  onValueChange={(v) => setFilters(f => ({
+                    ...f,
+                    is_private: v === 'all' ? 'all' : v === 'private',
+                  }))}
+                >
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Visibilité" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous</SelectItem>
+                    <SelectItem value="public">Publics</SelectItem>
+                    <SelectItem value="private">Privés</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button

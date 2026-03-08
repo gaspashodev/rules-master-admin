@@ -198,10 +198,23 @@ export interface CreateSeasonData {
 export function useCreateSeason() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: CreateSeasonData): Promise<void> => {
-      const { error } = await supabase
-        .from('seasons')
-        .insert(data);
+    mutationFn: async ({
+      data,
+      terminateActiveSeasonId,
+      adjustedActiveEndsAt,
+    }: {
+      data: CreateSeasonData;
+      terminateActiveSeasonId?: string;
+      adjustedActiveEndsAt?: string;
+    }): Promise<void> => {
+      if (terminateActiveSeasonId && adjustedActiveEndsAt) {
+        const { error: closeErr } = await supabase
+          .from('seasons')
+          .update({ status: 'completed', ends_at: adjustedActiveEndsAt })
+          .eq('id', terminateActiveSeasonId);
+        if (closeErr) throw closeErr;
+      }
+      const { error } = await supabase.from('seasons').insert(data);
       if (error) throw error;
     },
     onSuccess: () => {

@@ -42,6 +42,7 @@ export interface FeaturedQuiz {
   question_count: number;
   is_active: boolean;
   is_featured: boolean;
+  is_private: boolean;
   status: FeaturedQuizStatus;
   average_rating: number | null;
   rating_count: number;
@@ -56,6 +57,7 @@ export interface FeaturedQuizFilters {
   status?: FeaturedQuizStatus | 'all';
   search?: string;
   is_featured?: boolean;
+  is_private?: boolean | 'all';
   category?: string;
 }
 
