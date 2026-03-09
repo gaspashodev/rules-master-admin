@@ -3,9 +3,6 @@ import { supabase } from '@/lib/supabase';
 
 export interface DashboardStats {
   totalBggGames: number;
-  totalQuizQuestions: number;
-  activeQuizQuestions: number;
-  totalAwards: number;
   totalEvents: number;
   totalCompetitiveMatches: number;
   activeCompetitiveMatches: number;
@@ -17,10 +14,8 @@ export function useStats() {
   return useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: async (): Promise<DashboardStats> => {
-      const [bggGames, quizQuestions, awards, events, matches, participants] = await Promise.all([
+      const [bggGames, events, matches, participants] = await Promise.all([
         supabase.from('bgg_games_cache').select('*', { count: 'exact', head: true }),
-        supabase.from('bgg_quiz_questions').select('id, is_active'),
-        supabase.from('bgg_awards').select('*', { count: 'exact', head: true }),
         supabase.from('events').select('*', { count: 'exact', head: true }),
         supabase.from('competitive_matches').select('status'),
         supabase.from('competitive_match_participants').select('user_id'),
@@ -31,9 +26,6 @@ export function useStats() {
 
       return {
         totalBggGames: bggGames.count || 0,
-        totalQuizQuestions: quizQuestions.data?.length || 0,
-        activeQuizQuestions: quizQuestions.data?.filter(q => q.is_active).length || 0,
-        totalAwards: awards.count || 0,
         totalEvents: events.count || 0,
         totalCompetitiveMatches: matchesData.length,
         activeCompetitiveMatches: matchesData.filter(m => m.status === 'in_progress').length,
@@ -63,31 +55,39 @@ export interface StatusDataPoint {
   count: number;
 }
 
+export interface GameTypeDataPoint {
+  type: string;
+  count: number;
+}
+
 export interface DashboardChartData {
   eventDates: string[];
   matchDates: string[];
   eventsByCity: CityDataPoint[];
-  matchesByCity: CityDataPoint[];
+  usersByCity: CityDataPoint[];
   matchesByStatus: StatusDataPoint[];
+  eventsByGameType: GameTypeDataPoint[];
 }
+
+const GAME_TYPE_LABELS: Record<string, string> = {
+  boardgame: 'Jeu de société',
+  tcg: 'TCG',
+  rpg: 'Jeu de rôle',
+};
 
 export function useDashboardCharts() {
   return useQuery({
     queryKey: ['dashboard-charts'],
     queryFn: async (): Promise<DashboardChartData> => {
-      const [eventsResult, matchesResult, citiesResult] = await Promise.all([
-        supabase.from('events').select('starts_at, city'),
-        supabase.from('competitive_matches').select('created_at, status, city_id'),
-        supabase.from('cities').select('id, name'),
+      const [eventsResult, matchesResult, profilesResult] = await Promise.all([
+        supabase.from('events').select('starts_at, city, game_type'),
+        supabase.from('competitive_matches').select('created_at, status'),
+        supabase.from('profiles').select('city'),
       ]);
 
       const eventsData = eventsResult.data || [];
       const matchesData = matchesResult.data || [];
-      const citiesData = citiesResult.data || [];
-
-      // Build city lookup map
-      const cityLookup = new Map<string, string>();
-      citiesData.forEach(c => cityLookup.set(c.id, c.name));
+      const profilesData = profilesResult.data || [];
 
       // Raw dates for client-side grouping
       const eventDates = eventsData
@@ -108,15 +108,13 @@ export function useDashboardCharts() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 10);
 
-      // Matches by city using city_id lookup (top 10)
-      const matchCityMap = new Map<string, number>();
-      matchesData.forEach((m: { city_id?: string | null }) => {
-        if (!m.city_id) return;
-        const cityName = cityLookup.get(m.city_id);
-        if (!cityName) return;
-        matchCityMap.set(cityName, (matchCityMap.get(cityName) || 0) + 1);
+      // Users by city (top 10)
+      const userCityMap = new Map<string, number>();
+      profilesData.forEach((p: { city?: string | null }) => {
+        if (!p.city) return;
+        userCityMap.set(p.city, (userCityMap.get(p.city) || 0) + 1);
       });
-      const matchesByCity = Array.from(matchCityMap.entries())
+      const usersByCity = Array.from(userCityMap.entries())
         .map(([city, count]) => ({ city, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 10);
@@ -130,7 +128,17 @@ export function useDashboardCharts() {
       const matchesByStatus = Array.from(statusMap.entries())
         .map(([status, count]) => ({ status, count }));
 
-      return { eventDates, matchDates, eventsByCity, matchesByCity, matchesByStatus };
+      // Events by game_type
+      const gameTypeMap = new Map<string, number>();
+      eventsData.forEach((e: { game_type?: string | null }) => {
+        if (!e.game_type) return;
+        gameTypeMap.set(e.game_type, (gameTypeMap.get(e.game_type) || 0) + 1);
+      });
+      const eventsByGameType = Array.from(gameTypeMap.entries())
+        .map(([type, count]) => ({ type: GAME_TYPE_LABELS[type] || type, count }))
+        .sort((a, b) => b.count - a.count);
+
+      return { eventDates, matchDates, eventsByCity, usersByCity, matchesByStatus, eventsByGameType };
     },
     staleTime: 1000 * 60 * 5,
   });

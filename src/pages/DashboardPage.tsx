@@ -9,12 +9,9 @@ import { MATCH_STATUS_CONFIG } from '@/types/competitive';
 import type { MatchStatus } from '@/types/competitive';
 import {
   Dices,
-  ListTodo,
-  Trophy,
   CalendarDays,
-  Crown,
-  Swords,
   Users,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   BarChart,
@@ -46,6 +43,8 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: '#ef4444',
 };
 
+const GAME_TYPE_COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b'];
+
 const RANGE_OPTIONS: { value: ActivityRange; label: string }[] = [
   { value: '30d', label: '30 jours' },
   { value: '3m', label: '3 mois' },
@@ -56,10 +55,8 @@ const RANGE_OPTIONS: { value: ActivityRange; label: string }[] = [
 function formatLabel(label: string): string {
   const parts = label.split('-');
   if (parts.length === 3) {
-    // Day format: YYYY-MM-DD → "DD/MM"
     return `${parts[2]}/${parts[1]}`;
   }
-  // Month format: YYYY-MM → "Jan 25"
   const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
   return `${months[parseInt(parts[1]) - 1]} ${parts[0].slice(2)}`;
 }
@@ -82,7 +79,7 @@ export function DashboardPage() {
           <Skeleton className="h-5 w-72" />
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          {[1, 2, 3, 4, 5].map((i) => (
             <Skeleton key={i} className="h-32" />
           ))}
         </div>
@@ -97,7 +94,7 @@ export function DashboardPage() {
         <p className="text-muted-foreground">Vue d'ensemble de Rules Master</p>
       </div>
 
-      {/* Row 1: Existing stats */}
+      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Link to="/quiz/games">
           <Card className="hover:bg-muted/50 transition-colors">
@@ -112,38 +109,6 @@ export function DashboardPage() {
           </Card>
         </Link>
 
-        <Link to="/quiz/questions">
-          <Card className="hover:bg-muted/50 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Questions Quiz</CardTitle>
-              <ListTodo className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalQuizQuestions || 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats?.activeQuizQuestions || 0} actives
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link to="/quiz/awards">
-          <Card className="hover:bg-muted/50 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Prix & Récompenses</CardTitle>
-              <Trophy className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalAwards || 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">Prix enregistrés</p>
-            </CardContent>
-          </Card>
-        </Link>
-
-      </div>
-
-      {/* Row 2: Events + Competitive stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Link to="/events">
           <Card className="hover:bg-muted/50 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -160,23 +125,8 @@ export function DashboardPage() {
         <Link to="/competitive/matches">
           <Card className="hover:bg-muted/50 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Matchs La Couronne</CardTitle>
-              <Crown className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalCompetitiveMatches || 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats?.activeCompetitiveMatches || 0} en cours
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link to="/competitive/matches">
-          <Card className="hover:bg-muted/50 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Matchs terminés</CardTitle>
-              <Swords className="h-4 w-4 text-muted-foreground" />
+              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats?.completedCompetitiveMatches || 0}</div>
@@ -201,7 +151,7 @@ export function DashboardPage() {
 
       {/* Charts */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Activity chart with range tabs - full width */}
+        {/* Activity chart */}
         <Card className="md:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium">Activité</CardTitle>
@@ -234,10 +184,7 @@ export function DashboardPage() {
                       interval={activityRange === '30d' ? 4 : activityRange === 'all' ? 2 : undefined}
                     />
                     <YAxis allowDecimals={false} fontSize={12} />
-                    <Tooltip
-                      labelFormatter={formatLabel}
-                      contentStyle={tooltipStyle}
-                    />
+                    <Tooltip labelFormatter={formatLabel} contentStyle={tooltipStyle} />
                     <Legend />
                     <Line type="monotone" dataKey="events" name="Événements" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} />
                     <Line type="monotone" dataKey="matches" name="Matchs compétitifs" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} />
@@ -272,10 +219,10 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Matches by city */}
+        {/* Users by city */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Matchs compétitifs par ville (top 10)</CardTitle>
+            <CardTitle className="text-sm font-medium">Villes les plus représentées (top 10)</CardTitle>
           </CardHeader>
           <CardContent>
             {chartsLoading ? (
@@ -283,12 +230,12 @@ export function DashboardPage() {
             ) : (
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData?.matchesByCity} layout="vertical">
+                  <BarChart data={chartData?.usersByCity} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" allowDecimals={false} fontSize={12} />
                     <YAxis dataKey="city" type="category" width={120} fontSize={12} />
                     <Tooltip contentStyle={tooltipStyle} />
-                    <Bar dataKey="count" name="Matchs" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="count" name="Utilisateurs" fill="#22c55e" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -297,7 +244,7 @@ export function DashboardPage() {
         </Card>
 
         {/* Matches by status */}
-        <Card className="md:col-span-2">
+        <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">Matchs par statut</CardTitle>
           </CardHeader>
@@ -323,6 +270,40 @@ export function DashboardPage() {
                     </Pie>
                     <Tooltip contentStyle={tooltipStyle} />
                     <Legend formatter={(value: string) => MATCH_STATUS_CONFIG[value as MatchStatus]?.label || value} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Events by game type */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Répartition des événements par type</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {chartsLoading ? (
+              <Skeleton className="h-64" />
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={chartData?.eventsByGameType}
+                      dataKey="count"
+                      nameKey="type"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      label={({ count }) => count}
+                    >
+                      {chartData?.eventsByGameType.map((_, i) => (
+                        <Cell key={i} fill={GAME_TYPE_COLORS[i % GAME_TYPE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Legend />
                   </PieChart>
                 </ResponsiveContainer>
               </div>

@@ -15,6 +15,7 @@ import { CitiesSeasonsPage } from './pages/competitive/CitiesSeasonsPage';
 import { CitiesPage } from './pages/competitive/CitiesPage';
 import { SeasonsPage } from './pages/competitive/SeasonsPage';
 import { ChampionsPage } from './pages/competitive/ChampionsPage';
+import { CrownRequestsPage } from './pages/competitive/CrownRequestsPage';
 import { TournamentTemplatesPage } from './pages/tournament/TournamentTemplatesPage';
 import { UsersPage } from './pages/users/UsersPage';
 import { ModerationPage } from './pages/moderation/ModerationPage';
@@ -52,6 +53,7 @@ function App() {
           <Route path="/competitive/cities" element={<CitiesPage />} />
           <Route path="/competitive/seasons" element={<SeasonsPage />} />
           <Route path="/competitive/champions" element={<ChampionsPage />} />
+          <Route path="/competitive/crown-requests" element={<CrownRequestsPage />} />
           {/* Tournament routes */}
           <Route path="/tournament/templates" element={<TournamentTemplatesPage />} />
           <Route path="/tournament/templates/new" element={<TournamentFormPage />} />

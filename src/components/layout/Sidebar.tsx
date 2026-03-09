@@ -73,11 +73,14 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'La Couronne',
     icon: Swords,
+    badgeKey: 'moderation',
     children: [
       { name: 'Matchs compétitifs', href: '/competitive/matches', icon: Swords },
       { name: 'Villes', href: '/competitive/cities', icon: MapPin },
       { name: 'Saisons', href: '/competitive/seasons', icon: Calendar },
       { name: 'Champions', href: '/competitive/champions', icon: Crown },
+      { name: 'Contestations', href: '/moderation?tab=contestations', icon: ShieldAlert },
+      { name: 'Demandes de jeux', href: '/competitive/crown-requests', icon: Crown },
     ],
   },
   {
@@ -88,13 +91,10 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Utilisateurs',
     icon: Users,
-    href: '/users',
-  },
-  {
-    label: 'Modération',
-    icon: ShieldAlert,
-    href: '/moderation',
-    badgeKey: 'moderation',
+    children: [
+      { name: 'Joueurs', href: '/users', icon: Users },
+      { name: 'Signalements', href: '/moderation?tab=reports', icon: ShieldAlert },
+    ],
   },
   {
     label: 'Galerie',
@@ -205,9 +205,10 @@ function DirectLink({ section, pathname, badgeCount = 0 }: { section: NavSection
 function FlyoutItem({ section, pathname, badgeCount = 0 }: { section: NavSection; pathname: string; badgeCount?: number }) {
   const [open, setOpen] = useState(false);
 
-  const isChildActive = section.children?.some(
-    (child) => pathname === child.href || pathname.startsWith(child.href + '/'),
-  );
+  const isChildActive = section.children?.some((child) => {
+    const childPath = child.href.split('?')[0];
+    return pathname === childPath || pathname.startsWith(childPath + '/');
+  });
 
   return (
     <div
@@ -241,12 +242,13 @@ function FlyoutItem({ section, pathname, badgeCount = 0 }: { section: NavSection
       <div
         className={cn(
           'overflow-hidden transition-all duration-200',
-          open ? 'max-h-48 opacity-100' : 'max-h-0 opacity-0',
+          open ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0',
         )}
       >
         <div className="ml-4 pl-3 border-l border-border/50 space-y-0.5 py-1">
           {section.children!.map((child) => {
-            const isActive = pathname === child.href || pathname.startsWith(child.href + '/');
+            const childPath = child.href.split('?')[0];
+            const isActive = pathname === childPath || pathname.startsWith(childPath + '/');
             return (
               <Link
                 key={child.href}

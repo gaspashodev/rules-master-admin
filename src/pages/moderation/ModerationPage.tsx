@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ShieldAlert, Loader2, Users, CheckCircle, XCircle, Trophy, History } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,9 @@ import type { MatchContestation, PlayerReport } from '@/types/moderation';
 const PAGE_SIZE = 50;
 
 export function ModerationPage() {
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get('tab') === 'reports' ? 'reports' : 'contestations';
+
   // Contestations state
   const [contestationStatus, setContestationStatus] = useState('all');
   const [contestationPage, setContestationPage] = useState(0);
@@ -79,7 +83,7 @@ export function ModerationPage() {
         <p className="text-muted-foreground">Contestations de matchs et signalements de joueurs</p>
       </div>
 
-      <Tabs defaultValue="contestations">
+      <Tabs defaultValue={defaultTab}>
         <TabsList>
           <TabsTrigger value="contestations">
             Contestations ({contestationsData?.count || 0})
