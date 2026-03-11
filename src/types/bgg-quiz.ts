@@ -104,10 +104,8 @@ export interface BggQuizQuestion {
   type: BggQuestionType;
   question_data: QuestionData;
   is_active: boolean;
-  times_used: number;
-  times_correct: number;
-  times_incorrect: number;
-  created_by: string | null;
+  category: string | null;
+  quiz_id: string | null;
   created_at: string;
 }
 
@@ -162,6 +160,8 @@ export interface BggQuestionFormData {
   type: BggQuestionType;
   question_data: QuestionData;
   is_active: boolean;
+  category?: string | null;
+  quiz_id?: string | null;
 }
 
 // ============ QUESTION TEMPLATES ============

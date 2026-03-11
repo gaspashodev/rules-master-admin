@@ -432,12 +432,7 @@ export function useCreateBggQuestion() {
     mutationFn: async (data: BggQuestionFormData): Promise<BggQuizQuestion> => {
       const { data: question, error } = await supabase
         .from('bgg_quiz_questions')
-        .insert([{
-          ...data,
-          times_used: 0,
-          times_correct: 0,
-          times_incorrect: 0,
-        }])
+        .insert([data])
         .select()
         .single();
 

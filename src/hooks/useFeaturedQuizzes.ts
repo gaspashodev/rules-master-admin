@@ -6,9 +6,46 @@ import type {
   FeaturedQuiz,
   FeaturedQuizFilters,
   FeaturedQuizFormData,
+  ClassiqueQuestion,
+  ExpertQuestion,
 } from '@/types/featured-quizzes';
 
 const QUERY_KEY = ['featured-quizzes'];
+
+// ============ HELPERS ============
+
+function buildBggRows(quiz: FeaturedQuiz) {
+  return quiz.questions_data.map((q) => {
+    let correct_answer: { name: string; bgg_id: number };
+    let wrong_answers: { name: string; bgg_id: number }[] | undefined;
+
+    if (quiz.mode === 'classique') {
+      const cq = q as ClassiqueQuestion;
+      correct_answer = { name: cq.options[cq.correct_index]?.name ?? '', bgg_id: 0 };
+      wrong_answers = cq.options
+        .filter((_, i) => i !== cq.correct_index)
+        .map((o) => ({ name: o.name, bgg_id: 0 }));
+    } else {
+      const eq = q as ExpertQuestion;
+      correct_answer = { name: eq.correct_answer ?? '', bgg_id: 0 };
+      wrong_answers = undefined;
+    }
+
+    return {
+      type: (q.image_url ? 'photo' : 'custom') as 'photo' | 'custom',
+      is_active: true,
+      category: quiz.category ?? null,
+      quiz_id: quiz.id,
+      question_data: {
+        question: q.question,
+        image_url: q.image_url ?? null,
+        explanation: q.explanation ?? null,
+        correct_answer,
+        ...(wrong_answers ? { wrong_answers } : {}),
+      },
+    };
+  });
+}
 
 // ============ QUERIES ============
 
@@ -170,17 +207,28 @@ export function useApproveFeaturedQuiz() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string): Promise<void> => {
+    mutationFn: async (quiz: FeaturedQuiz): Promise<void> => {
+      // 1. Approve the quiz
       const { error } = await supabase
         .from('featured_quizzes')
         .update({ status: 'approved', is_active: true })
-        .eq('id', id);
+        .eq('id', quiz.id);
 
       if (error) throw error;
+
+      // 2. Sync questions to bgg_quiz_questions (public quizzes only)
+      if (!quiz.is_private && quiz.questions_data && quiz.questions_data.length > 0) {
+        const { error: insertError } = await supabase
+          .from('bgg_quiz_questions')
+          .insert(buildBggRows(quiz));
+
+        if (insertError) throw insertError;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (_, quiz) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-      toast.success('Quiz approuvé et activé');
+      queryClient.invalidateQueries({ queryKey: ['bgg-quiz', 'questions'] });
+      toast.success(quiz.is_private ? 'Quiz approuvé' : 'Quiz approuvé et questions synchronisées');
     },
     onError: (error: Error) => {
       toast.error(`Erreur: ${error.message}`);
@@ -210,6 +258,37 @@ export function useRejectFeaturedQuiz() {
   });
 }
 
+export function useSyncQuizQuestions() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (quiz: FeaturedQuiz): Promise<void> => {
+      // Delete existing synced questions for this quiz, then re-insert
+      const { error: deleteError } = await supabase
+        .from('bgg_quiz_questions')
+        .delete()
+        .eq('quiz_id', quiz.id);
+
+      if (deleteError) throw deleteError;
+
+      if (quiz.questions_data && quiz.questions_data.length > 0) {
+        const { error: insertError } = await supabase
+          .from('bgg_quiz_questions')
+          .insert(buildBggRows(quiz));
+
+        if (insertError) throw insertError;
+      }
+    },
+    onSuccess: (_, quiz) => {
+      queryClient.invalidateQueries({ queryKey: ['bgg-quiz', 'questions'] });
+      toast.success(`${quiz.questions_data.length} question(s) synchronisée(s)`);
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+}
+
 export function useToggleFeaturedQuizActive() {
   const queryClient = useQueryClient();
 
@@ -221,9 +300,11 @@ export function useToggleFeaturedQuizActive() {
         .eq('id', id);
 
       if (error) throw error;
+      // Propagation to bgg_quiz_questions handled by DB trigger
     },
     onSuccess: (_, { is_active }) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['bgg-quiz', 'questions'] });
       toast.success(is_active ? 'Quiz activé' : 'Quiz désactivé');
     },
     onError: (error: Error) => {

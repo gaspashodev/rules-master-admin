@@ -52,6 +52,7 @@ import type {
   BggGameOption,
   CustomQuestionData,
 } from '@/types/bgg-quiz';
+import { QUIZ_CATEGORIES } from '@/types/featured-quizzes';
 import {
   Plus,
   Trash2,
@@ -186,6 +187,7 @@ function QuestionFormDialog({
   const updateQuestion = useUpdateBggQuestion();
 
   const [isActive, setIsActive] = useState(true);
+  const [category, setCategory] = useState<string>('');
   const [questionData, setQuestionData] = useState<CustomQuestionData>(getDefaultQuestionData());
   const [manualWrongAnswers, setManualWrongAnswers] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
@@ -196,6 +198,7 @@ function QuestionFormDialog({
     if (open) {
       if (existingQuestion) {
         setIsActive(existingQuestion.is_active);
+        setCategory(existingQuestion.category || '');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data = existingQuestion.question_data as any;
         setQuestionData({
@@ -212,6 +215,7 @@ function QuestionFormDialog({
       } else if (!questionId) {
         // New question — reset form
         setIsActive(true);
+        setCategory('');
         setQuestionData(getDefaultQuestionData());
         setManualWrongAnswers(false);
       }
@@ -226,6 +230,17 @@ function QuestionFormDialog({
     const newWrongAnswers = [...(questionData.wrong_answers || [{ ...emptyGame }, { ...emptyGame }, { ...emptyGame }])];
     newWrongAnswers[index] = game;
     updateField('wrong_answers', newWrongAnswers);
+  };
+
+  const isBoardGame = category === 'Jeux de société';
+
+  const handleCategoryChange = (value: string) => {
+    setCategory(value);
+    // Reset wrong answers when switching away from board games (BGG data no longer relevant)
+    if (value !== 'Jeux de société' && manualWrongAnswers) {
+      setManualWrongAnswers(false);
+      updateField('wrong_answers', undefined);
+    }
   };
 
   const handleManualWrongAnswersToggle = (enabled: boolean) => {
@@ -264,6 +279,7 @@ function QuestionFormDialog({
     const formData: BggQuestionFormData = {
       type: dataToSave.image_url ? 'photo' : 'custom',
       is_active: isActive,
+      category: category || null,
       question_data: dataToSave,
     };
 
@@ -287,6 +303,21 @@ function QuestionFormDialog({
         </DialogHeader>
 
         <div className="space-y-5">
+          {/* Category */}
+          <div className="space-y-2">
+            <Label>Thématique</Label>
+            <Select value={category} onValueChange={handleCategoryChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionner une thématique..." />
+              </SelectTrigger>
+              <SelectContent>
+                {QUIZ_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Question text */}
           <div className="space-y-2">
             <Label htmlFor="question">Question *</Label>
@@ -355,11 +386,19 @@ function QuestionFormDialog({
           {/* Correct answer */}
           <div className="space-y-2">
             <Label>Bonne réponse *</Label>
-            <GameAnswerInput
-              value={questionData.correct_answer}
-              onChange={(game) => updateField('correct_answer', game)}
-              placeholder="Tapez un nom ou recherchez un jeu BGG..."
-            />
+            {isBoardGame ? (
+              <GameAnswerInput
+                value={questionData.correct_answer}
+                onChange={(game) => updateField('correct_answer', game)}
+                placeholder="Tapez un nom ou recherchez un jeu BGG..."
+              />
+            ) : (
+              <Input
+                value={questionData.correct_answer.name}
+                onChange={(e) => updateField('correct_answer', { bgg_id: 0, name: e.target.value })}
+                placeholder="Bonne réponse..."
+              />
+            )}
           </div>
 
           {/* Alternative correct answers */}
@@ -422,7 +461,9 @@ function QuestionFormDialog({
               <div>
                 <Label htmlFor="manual-wrong">Choisir les mauvaises réponses</Label>
                 <p className="text-xs text-muted-foreground">
-                  Par défaut, 3 jeux aléatoires seront proposés
+                  {isBoardGame
+                    ? 'Par défaut, 3 jeux aléatoires seront proposés'
+                    : 'Ajouter 3 mauvaises réponses pour ce quiz'}
                 </p>
               </div>
             </div>
@@ -431,12 +472,21 @@ function QuestionFormDialog({
               <div className="space-y-3 pl-4 border-l-2 border-muted">
                 <Label>Mauvaises réponses (3)</Label>
                 {[0, 1, 2].map((index) => (
-                  <GameAnswerInput
-                    key={index}
-                    value={questionData.wrong_answers?.[index] || emptyGame}
-                    onChange={(game) => updateWrongAnswer(index, game)}
-                    placeholder={`Mauvaise réponse ${index + 1}...`}
-                  />
+                  isBoardGame ? (
+                    <GameAnswerInput
+                      key={index}
+                      value={questionData.wrong_answers?.[index] || emptyGame}
+                      onChange={(game) => updateWrongAnswer(index, game)}
+                      placeholder={`Mauvaise réponse ${index + 1}...`}
+                    />
+                  ) : (
+                    <Input
+                      key={index}
+                      value={questionData.wrong_answers?.[index]?.name || ''}
+                      onChange={(e) => updateWrongAnswer(index, { bgg_id: 0, name: e.target.value })}
+                      placeholder={`Mauvaise réponse ${index + 1}...`}
+                    />
+                  )
                 ))}
               </div>
             )}
@@ -652,9 +702,8 @@ export function BggQuestionsPage() {
               </div>
             ) : (
               <div className="divide-y">
-                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/30">
+                <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/30">
                   <span>Question / Réponse</span>
-                  <span className="w-16 text-center">Stats</span>
                   <span className="w-12 text-center">Statut</span>
                   <span className="w-24 text-center">Actions</span>
                 </div>
@@ -664,15 +713,11 @@ export function BggQuestionsPage() {
                   const answerName = data?.correct_answer?.name || '';
                   const questionText = data?.question || 'Question sans titre';
                   const hasImage = !!data?.image_url;
-                  const successRate =
-                    question.times_used > 0
-                      ? Math.round((question.times_correct / question.times_used) * 100)
-                      : null;
 
                   return (
                     <div
                       key={question.id}
-                      className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-3 py-2 items-center hover:bg-muted/50 transition-colors group"
+                      className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 items-center hover:bg-muted/50 transition-colors group"
                     >
                       {/* Question + answer */}
                       <div className="min-w-0">
@@ -686,13 +731,6 @@ export function BggQuestionsPage() {
                           </p>
                         )}
                       </div>
-
-                      {/* Stats */}
-                      <span className="w-16 text-center text-xs text-muted-foreground">
-                        {question.times_used > 0
-                          ? `${question.times_used}x${successRate !== null ? ` (${successRate}%)` : ''}`
-                          : '—'}
-                      </span>
 
                       {/* Status */}
                       <div className="w-12 flex justify-center">

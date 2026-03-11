@@ -43,6 +43,7 @@ import {
   useRejectFeaturedQuiz,
   useToggleFeaturedQuizActive,
   useToggleFeaturedQuizFeatured,
+  useSyncQuizQuestions,
 } from '@/hooks/useFeaturedQuizzes';
 import { ImageUploader } from '@/components/bgg-quiz';
 import { toast } from 'sonner';
@@ -71,6 +72,7 @@ import {
   X,
   Clock,
   HelpCircle,
+  RefreshCw,
 } from 'lucide-react';
 
 // ============ QUESTION VIEWER (read-only for review) ============
@@ -133,7 +135,7 @@ function ReviewDialog({
   if (!quiz) return null;
 
   const handleApprove = async () => {
-    await approve.mutateAsync(quiz.id);
+    await approve.mutateAsync(quiz);
     onClose();
   };
 
@@ -693,6 +695,7 @@ export function FeaturedQuizzesPage() {
   const toggleActive = useToggleFeaturedQuizActive();
   const toggleFeatured = useToggleFeaturedQuizFeatured();
   const deleteQuiz = useDeleteFeaturedQuiz();
+  const syncQuestions = useSyncQuizQuestions();
 
   const handleSearchChange = (value: string) => {
     setSearchInput(value);
@@ -950,6 +953,18 @@ export function FeaturedQuizzesPage() {
                         </div>
 
                         <div className="w-28 flex items-center justify-center gap-1">
+                          {quiz.status === 'approved' && !quiz.is_private && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-blue-500"
+                              title="Synchroniser les questions vers BGG Quiz"
+                              onClick={() => syncQuestions.mutate(quiz)}
+                              disabled={syncQuestions.isPending}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(quiz)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
