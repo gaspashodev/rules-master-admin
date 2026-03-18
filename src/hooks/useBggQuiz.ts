@@ -360,22 +360,39 @@ export function useCreateBggGame() {
 // ============ BGG QUIZ QUESTIONS ============
 
 export function useBggQuestions(filters?: BggQuestionFilters) {
+  const page = filters?.page ?? 0;
+  const pageSize = filters?.pageSize ?? 50;
+
   return useQuery({
     queryKey: ['bgg-quiz', 'questions', filters],
-    queryFn: async (): Promise<BggQuizQuestion[]> => {
+    queryFn: async (): Promise<{ data: BggQuizQuestion[]; count: number }> => {
       let query = supabase
         .from('bgg_quiz_questions')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*', { count: 'exact' })
+        .is('quiz_id', null)
+        .order('created_at', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (filters?.is_active !== undefined && filters.is_active !== 'all') {
         query = query.eq('is_active', filters.is_active);
       }
 
-      const { data, error } = await query;
+      if (filters?.category && filters.category !== 'all') {
+        query = query.eq('category', filters.category);
+      }
+
+      if (filters?.has_photo) {
+        query = query.not('question_data->>image_url', 'is', null).neq('question_data->>image_url', '');
+      }
+
+      if (filters?.search && filters.search.length >= 2) {
+        query = query.ilike('question_data->>question', `%${filters.search}%`);
+      }
+
+      const { data, error, count } = await query;
 
       if (error) throw error;
-      return data || [];
+      return { data: data || [], count: count || 0 };
     },
   });
 }
@@ -405,7 +422,8 @@ export function useBggQuestionsStats() {
     queryFn: async (): Promise<BggQuestionsStats> => {
       const { data, error } = await supabase
         .from('bgg_quiz_questions')
-        .select('is_active');
+        .select('is_active')
+        .is('quiz_id', null);
 
       if (error) throw error;
 

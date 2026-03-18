@@ -1,11 +1,18 @@
-import { useState } from 'react';
-import { Megaphone, Trash2, Loader2, Bell, BellOff, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Megaphone, Trash2, Loader2, Bell, BellOff, ExternalLink, Trophy, Bold, Italic, Underline } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   AlertDialog,
@@ -23,12 +30,36 @@ import { useBroadcasts, useCreateBroadcast, useDeleteBroadcast } from '@/hooks/u
 import type { BroadcastFormData } from '@/types/broadcast';
 
 function getDefaultForm(): BroadcastFormData {
-  return { content: '', image_url: '', link: '', send_push: false };
+  return { content: '', image_url: '', link: '', send_push: false, type: 'annonce' };
+}
+
+function applyFormat(
+  textarea: HTMLTextAreaElement | null,
+  marker: string,
+  content: string,
+  setContent: (v: string) => void,
+) {
+  if (!textarea) return;
+  const { selectionStart: start, selectionEnd: end } = textarea;
+  const selected = content.slice(start, end);
+  const formatted = `${marker}${selected || 'texte'}${marker}`;
+  const newValue = content.slice(0, start) + formatted + content.slice(end);
+  setContent(newValue);
+  requestAnimationFrame(() => {
+    textarea.focus();
+    const cursorStart = selected ? start : start + marker.length;
+    const cursorEnd = selected ? start + formatted.length : start + marker.length + 5;
+    textarea.setSelectionRange(cursorStart, cursorEnd);
+  });
 }
 
 export function BroadcastPage() {
   const [form, setForm] = useState<BroadcastFormData>(getDefaultForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+
+  const fmt = (marker: string) =>
+    applyFormat(contentRef.current, marker, form.content, (v) => setForm((f) => ({ ...f, content: v })));
 
   const { data: broadcasts = [], isLoading } = useBroadcasts();
   const create = useCreateBroadcast();
@@ -57,15 +88,55 @@ export function BroadcastPage() {
       {/* Compose */}
       <Card>
         <CardContent className="pt-6 space-y-4">
+          {/* Type */}
+          <div className="space-y-2">
+            <Label>Type de message</Label>
+            <Select
+              value={form.type}
+              onValueChange={(v) => setForm((f) => ({ ...f, type: v as 'annonce' | 'concours' }))}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="annonce">
+                  <span className="flex items-center gap-2">
+                    <Megaphone className="h-4 w-4" />
+                    Annonce
+                  </span>
+                </SelectItem>
+                <SelectItem value="concours">
+                  <span className="flex items-center gap-2">
+                    <Trophy className="h-4 w-4" />
+                    Concours
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Message */}
           <div className="space-y-2">
             <Label>Message *</Label>
+            <div className="flex items-center gap-1 p-1 rounded-md border bg-muted/30 w-fit">
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Gras (**texte**)" onClick={() => fmt('**')}>
+                <Bold className="h-3.5 w-3.5" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Italique (*texte*)" onClick={() => fmt('*')}>
+                <Italic className="h-3.5 w-3.5" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Souligné (__texte__)" onClick={() => fmt('__')}>
+                <Underline className="h-3.5 w-3.5" />
+              </Button>
+            </div>
             <Textarea
+              ref={contentRef}
               placeholder="Écrivez votre message ici..."
               value={form.content}
               onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
               rows={4}
             />
+            <p className="text-xs text-muted-foreground">Syntaxe : <code>**gras**</code> · <code>*italique*</code> · <code>__souligné__</code></p>
           </div>
 
           {/* Image */}
@@ -123,7 +194,7 @@ export function BroadcastPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Confirmer la diffusion</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Ce message sera visible par tous les joueurs.
+                    Ce message de type <strong>{form.type === 'concours' ? 'Concours' : 'Annonce'}</strong> sera visible par tous les joueurs.
                     {form.send_push && ' Une notification push sera également envoyée sur mobile.'}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -178,6 +249,16 @@ export function BroadcastPage() {
                     <img src={msg.image_url} alt="" className="w-40 h-24 object-cover rounded border" />
                   )}
                   <div className="flex items-center gap-2 flex-wrap">
+                    <Badge
+                      variant={msg.type === 'concours' ? 'default' : 'secondary'}
+                      className="gap-1 text-xs"
+                    >
+                      {msg.type === 'concours' ? (
+                        <><Trophy className="h-3 w-3" />Concours</>
+                      ) : (
+                        <><Megaphone className="h-3 w-3" />Annonce</>
+                      )}
+                    </Badge>
                     {msg.link && (
                       <Badge variant="outline" className="gap-1 text-xs">
                         <ExternalLink className="h-3 w-3" />

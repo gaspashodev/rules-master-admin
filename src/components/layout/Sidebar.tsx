@@ -19,10 +19,12 @@ import {
   Image,
   Crown,
   Calendar,
+  MessageSquare,
   type LucideIcon,
 } from 'lucide-react';
 import { usePendingQuizzesCount } from '@/hooks/useFeaturedQuizzes';
 import { usePendingModerationCount } from '@/hooks/useModeration';
+import { useFeedbackCount } from '@/hooks/useFeedback';
 
 /* ── Navigation data ──────────────────────────────────────────── */
 
@@ -30,6 +32,7 @@ interface NavChild {
   name: string;
   href: string;
   icon: LucideIcon;
+  badgeKey?: string;
 }
 
 interface NavSection {
@@ -79,7 +82,7 @@ const NAV_SECTIONS: NavSection[] = [
       { name: 'Villes', href: '/competitive/cities', icon: MapPin },
       { name: 'Saisons', href: '/competitive/seasons', icon: Calendar },
       { name: 'Champions', href: '/competitive/champions', icon: Crown },
-      { name: 'Contestations', href: '/moderation?tab=contestations', icon: ShieldAlert },
+      { name: 'Contestations', href: '/moderation?tab=contestations', icon: ShieldAlert, badgeKey: 'contestations' },
       { name: 'Demandes de jeux', href: '/competitive/crown-requests', icon: Crown },
     ],
   },
@@ -91,9 +94,11 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Utilisateurs',
     icon: Users,
+    badgeKey: 'utilisateurs',
     children: [
       { name: 'Joueurs', href: '/users', icon: Users },
-      { name: 'Signalements', href: '/moderation?tab=reports', icon: ShieldAlert },
+      { name: 'Signalements', href: '/moderation?tab=reports', icon: ShieldAlert, badgeKey: 'reports' },
+      { name: 'Feedbacks Alpha', href: '/feedback', icon: MessageSquare, badgeKey: 'feedback' },
     ],
   },
   {
@@ -132,11 +137,20 @@ function NotifBadge({ count }: { count: number }) {
 export function Sidebar() {
   const location = useLocation();
   const { data: quizCount } = usePendingQuizzesCount();
-  const { data: moderationCount } = usePendingModerationCount();
+  const { data: moderation } = usePendingModerationCount();
+  const { data: feedbackCount } = useFeedbackCount();
+
+  const contestations = moderation?.contestations || 0;
+  const reports = moderation?.reports || 0;
+  const feedback = feedbackCount || 0;
 
   const badgeCounts: Record<string, number> = {
     quiz: quizCount || 0,
-    moderation: moderationCount || 0,
+    moderation: moderation?.total || 0,
+    contestations,
+    reports,
+    feedback,
+    utilisateurs: reports + feedback,
   };
 
   return (
@@ -161,6 +175,7 @@ export function Sidebar() {
               section={section}
               pathname={location.pathname}
               badgeCount={section.badgeKey ? badgeCounts[section.badgeKey] : 0}
+              childBadgeCounts={badgeCounts}
             />
           ) : (
             <DirectLink
@@ -202,7 +217,7 @@ function DirectLink({ section, pathname, badgeCount = 0 }: { section: NavSection
 
 /* ── Expandable item (children revealed on hover) ─────────────── */
 
-function FlyoutItem({ section, pathname, badgeCount = 0 }: { section: NavSection; pathname: string; badgeCount?: number }) {
+function FlyoutItem({ section, pathname, badgeCount = 0, childBadgeCounts = {} }: { section: NavSection; pathname: string; badgeCount?: number; childBadgeCounts?: Record<string, number> }) {
   const [open, setOpen] = useState(false);
 
   const isChildActive = section.children?.some((child) => {
@@ -262,6 +277,7 @@ function FlyoutItem({ section, pathname, badgeCount = 0 }: { section: NavSection
               >
                 <child.icon className="h-3.5 w-3.5" />
                 {child.name}
+                {child.badgeKey && <NotifBadge count={childBadgeCounts[child.badgeKey] || 0} />}
               </Link>
             );
           })}

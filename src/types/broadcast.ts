@@ -1,9 +1,12 @@
+export type BroadcastMessageType = 'annonce' | 'concours';
+
 export interface BroadcastMessage {
   id: string;
   content: string;
   image_url: string | null;
   link: string | null;
   send_push: boolean;
+  type: BroadcastMessageType;
   created_at: string;
 }
 
@@ -12,4 +15,5 @@ export interface BroadcastFormData {
   image_url: string;
   link: string;
   send_push: boolean;
+  type: BroadcastMessageType;
 }

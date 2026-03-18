@@ -343,20 +343,18 @@ export function useResolveReport() {
 export function usePendingModerationCount() {
   return useQuery({
     queryKey: ['moderation', 'pending-count'],
-    queryFn: async (): Promise<number> => {
+    queryFn: async (): Promise<{ total: number; contestations: number; reports: number }> => {
       const [contestations, reports] = await Promise.all([
-        supabase
-          .from('match_contestations')
-          .select('id', { count: 'exact' }),
-        supabase
-          .from('player_reports')
-          .select('id', { count: 'exact' }),
+        supabase.from('match_contestations').select('id', { count: 'exact' }).eq('status', 'pending'),
+        supabase.from('player_reports').select('id', { count: 'exact' }).eq('status', 'pending'),
       ]);
 
       if (contestations.error) throw contestations.error;
       if (reports.error) throw reports.error;
 
-      return (contestations.count || 0) + (reports.count || 0);
+      const c = contestations.count || 0;
+      const r = reports.count || 0;
+      return { total: c + r, contestations: c, reports: r };
     },
   });
 }

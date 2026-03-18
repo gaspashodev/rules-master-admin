@@ -1,27 +1,56 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import type { UserProfile, UsersFilters } from '@/types/users';
+import type { UserProfile, UsersFilters, UserContributions, UserAchievement } from '@/types/users';
 
 // ============ USERS LIST ============
 
 export function useUsers(filters?: UsersFilters) {
   const search = filters?.search || '';
+  const sortBy = filters?.sortBy || 'date';
+  const sortDir = filters?.sortDir || 'desc';
+  const ascending = sortDir === 'asc';
 
   return useQuery({
-    queryKey: ['users', 'list', { search }],
+    queryKey: ['users', 'list', { search, sortBy, sortDir }],
     queryFn: async (): Promise<UserProfile[]> => {
-      const { data, error } = await supabase
+      const isSearching = search.length >= 2;
+
+      // For contribution/donation sorts: query top_contributors directly
+      if (!isSearching && (sortBy === 'contributions' || sortBy === 'dons')) {
+        const orderCol = sortBy === 'dons' ? 'donations_pts' : 'score';
+        const { data, error } = await supabase
+          .from('top_contributors')
+          .select('user_id, username, avatar_url, is_certified, score, donations_pts')
+          .order(orderCol, { ascending })
+          .limit(20);
+        if (error) throw error;
+        return ((data || []).map((r: Record<string, unknown>) => ({ ...r, id: r.user_id }))) as unknown as UserProfile[];
+      }
+
+      // Otherwise query profiles directly
+      const orderMap: Record<string, string> = {
+        date: 'created_at',
+        fiabilite: 'reliability_score',
+        contributions: 'created_at',
+        dons: 'created_at',
+      };
+
+      let query = supabase
         .from('profiles')
-        .select('id, username, role, reliability_score, is_banned, is_certified, created_at')
-        .ilike('username', `%${search}%`)
-        .order('created_at', { ascending: false })
+        .select('id, username, avatar_url, role, reliability_score, is_banned, is_certified, created_at')
+        .order(orderMap[sortBy] || 'created_at', { ascending })
         .limit(20);
 
+      if (isSearching) {
+        query = query.ilike('username', `%${search}%`);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return (data as unknown as UserProfile[]) || [];
     },
-    enabled: search.length >= 2,
+    enabled: search.length === 0 || search.length >= 2,
   });
 }
 
@@ -33,13 +62,75 @@ export function useUserProfile(userId: string | undefined) {
     queryFn: async (): Promise<UserProfile> => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, role, reliability_score, is_banned, is_certified, created_at')
+        .select('id, username, avatar_url, role, reliability_score, is_banned, is_certified, created_at')
         .eq('id', userId!)
         .single();
       if (error) throw error;
       return data as unknown as UserProfile;
     },
     enabled: !!userId,
+  });
+}
+
+// ============ USER CONTRIBUTIONS ============
+
+export function useUserContributions(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['users', 'contributions', userId],
+    queryFn: async (): Promise<UserContributions | null> => {
+      const { data, error } = await supabase
+        .from('top_contributors')
+        .select('events_organized, events_participated, quizzes_created, matches_played, polls_answered, monthly_logins, donations_pts, score')
+        .eq('user_id', userId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data as UserContributions | null;
+    },
+    enabled: !!userId,
+  });
+}
+
+// ============ USER ACHIEVEMENTS ============
+
+export function useUserAchievements(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['users', 'achievements', userId],
+    queryFn: async (): Promise<UserAchievement[]> => {
+      const { data, error } = await supabase
+        .from('user_achievements')
+        .select('id, achievement_type, tier')
+        .eq('user_id', userId!);
+      if (error) throw error;
+      return (data as unknown as UserAchievement[]) || [];
+    },
+    enabled: !!userId,
+  });
+}
+
+export function useGrantAchievement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      achievementType,
+      tier,
+    }: {
+      userId: string;
+      achievementType: string;
+      tier: number;
+    }): Promise<void> => {
+      const { error } = await supabase
+        .from('user_achievements')
+        .insert({ user_id: userId, achievement_type: achievementType, tier });
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['users', 'achievements', variables.userId] });
+      toast.success('Succès attribué au joueur');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
   });
 }
 

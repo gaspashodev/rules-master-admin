@@ -34,6 +34,7 @@ function buildBggRows(quiz: FeaturedQuiz) {
     return {
       type: (q.image_url ? 'photo' : 'custom') as 'photo' | 'custom',
       is_active: true,
+      is_expert_only: quiz.mode === 'expert',
       category: quiz.category ?? null,
       quiz_id: quiz.id,
       question_data: {

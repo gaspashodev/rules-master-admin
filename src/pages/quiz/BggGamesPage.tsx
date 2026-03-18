@@ -377,7 +377,7 @@ function EditGameDialog({
     image_url: game.image_url || '',
     description1: game.descriptions?.[0] || '',
     description2: game.descriptions?.[1] || '',
-    designers: game.designers?.join(', ') || '',
+    designers: game.designers?.filter(d => d !== '(Uncredited)').join(', ') || '',
     rating: game.rating || '',
     rank: game.rank || '',
     weight: game.weight || '',

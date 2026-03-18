@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Trophy, Plus, Search, X, ChevronUp, ChevronDown,
   Shuffle, Star, Loader2, ExternalLink, Upload, FileEdit,
-  ArrowLeft, Save,
+  ArrowLeft, Save, ImageIcon, Check,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -120,10 +120,11 @@ function GameSlotSearch({
   onCustom,
 }: {
   onSelect: (game: BggGameCache) => void;
-  onCustom: (name: string) => void;
+  onCustom: (name: string, imageUrl: string | null) => void;
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [customName, setCustomName] = useState('');
+  const [customImageUrl, setCustomImageUrl] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
   const [showAddById, setShowAddById] = useState(false);
@@ -173,32 +174,35 @@ function GameSlotSearch({
   };
 
   if (showCustom) {
+    const handleConfirm = () => {
+      if (!customName.trim()) return;
+      onCustom(customName.trim(), customImageUrl.trim() || null);
+      setCustomName('');
+      setCustomImageUrl('');
+      setShowCustom(false);
+    };
     return (
-      <div className="flex gap-2">
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Input
+            value={customName}
+            onChange={(e) => setCustomName(e.target.value)}
+            placeholder="Nom du jeu custom..."
+            className="flex-1"
+            autoFocus
+            onKeyDown={(e) => { if (e.key === 'Enter') handleConfirm(); }}
+          />
+          <Button size="sm" onClick={handleConfirm} disabled={!customName.trim()}>OK</Button>
+          <Button size="sm" variant="ghost" onClick={() => { setShowCustom(false); setCustomName(''); setCustomImageUrl(''); }}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
         <Input
-          value={customName}
-          onChange={(e) => setCustomName(e.target.value)}
-          placeholder="Nom du jeu custom..."
-          className="flex-1"
-          autoFocus
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && customName.trim()) {
-              onCustom(customName.trim());
-              setCustomName('');
-              setShowCustom(false);
-            }
-          }}
+          value={customImageUrl}
+          onChange={(e) => setCustomImageUrl(e.target.value)}
+          placeholder="URL d'image (optionnel)..."
+          className="text-xs"
         />
-        <Button
-          size="sm"
-          onClick={() => { if (customName.trim()) { onCustom(customName.trim()); setCustomName(''); setShowCustom(false); } }}
-          disabled={!customName.trim()}
-        >
-          OK
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setShowCustom(false)}>
-          <X className="h-4 w-4" />
-        </Button>
       </div>
     );
   }
@@ -330,6 +334,8 @@ export function TournamentFormPage() {
   const [expiresAt, setExpiresAt] = useState('');
   const [size, setSize] = useState<TournamentSize>(8);
   const [games, setGames] = useState<(TournamentGame | null)[]>(Array(8).fill(null));
+  const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
+  const [editingImageValue, setEditingImageValue] = useState('');
 
   // Load existing template
   useEffect(() => {
@@ -356,6 +362,17 @@ export function TournamentFormPage() {
       }
       return prev.slice(0, newSize);
     });
+  }, []);
+
+  const handleUpdateGameImage = useCallback((index: number, imageUrl: string | null) => {
+    setGames(prev => {
+      const next = [...prev];
+      const game = next[index];
+      if (game) next[index] = { ...game, image_url: imageUrl };
+      return next;
+    });
+    setEditingImageIndex(null);
+    setEditingImageValue('');
   }, []);
 
   const handleSetGame = useCallback((index: number, game: TournamentGame) => {
@@ -611,24 +628,64 @@ export function TournamentFormPage() {
 
                   {game ? (
                     <>
-                      {game.image_url && (
-                        <img src={game.image_url} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                      {editingImageIndex === index ? (
+                        <div className="flex-1 flex gap-1.5 items-center">
+                          {game.image_url && (
+                            <img src={game.image_url} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                          )}
+                          <Input
+                            value={editingImageValue}
+                            onChange={(e) => setEditingImageValue(e.target.value)}
+                            placeholder="URL d'image..."
+                            className="h-7 text-xs flex-1"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleUpdateGameImage(index, editingImageValue.trim() || null);
+                              if (e.key === 'Escape') { setEditingImageIndex(null); setEditingImageValue(''); }
+                            }}
+                          />
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => handleUpdateGameImage(index, editingImageValue.trim() || null)}>
+                            <Check className="h-3.5 w-3.5 text-green-500" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { setEditingImageIndex(null); setEditingImageValue(''); }}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          {game.image_url ? (
+                            <img src={game.image_url} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                          ) : game.is_custom ? (
+                            <div className="h-8 w-8 rounded border border-dashed flex items-center justify-center shrink-0">
+                              <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                          ) : null}
+                          <span className="flex-1 text-sm font-medium truncate">{game.name}</span>
+                          <Badge variant={game.is_custom ? 'secondary' : 'outline'} className="text-xs shrink-0">
+                            {game.is_custom ? 'Custom' : 'BGG'}
+                          </Badge>
+                          <div className="flex gap-0.5 shrink-0">
+                            {game.is_custom && (
+                              <Button
+                                variant="ghost" size="icon" className="h-7 w-7"
+                                title="Modifier l'image"
+                                onClick={() => { setEditingImageIndex(index); setEditingImageValue(game.image_url || ''); }}
+                              >
+                                <ImageIcon className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMoveUp(index)} disabled={index === 0}>
+                              <ChevronUp className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMoveDown(index)} disabled={index === games.length - 1}>
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleClearGame(index)}>
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </>
                       )}
-                      <span className="flex-1 text-sm font-medium truncate">{game.name}</span>
-                      <Badge variant={game.is_custom ? 'secondary' : 'outline'} className="text-xs shrink-0">
-                        {game.is_custom ? 'Custom' : 'BGG'}
-                      </Badge>
-                      <div className="flex gap-0.5 shrink-0">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMoveUp(index)} disabled={index === 0}>
-                          <ChevronUp className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMoveDown(index)} disabled={index === games.length - 1}>
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleClearGame(index)}>
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
                     </>
                   ) : (
                     <div className="flex-1">
@@ -641,11 +698,11 @@ export function TournamentFormPage() {
                             is_custom: false,
                           });
                         }}
-                        onCustom={(name) => {
+                        onCustom={(name, imageUrl) => {
                           handleSetGame(index, {
                             game_id: null,
                             name,
-                            image_url: null,
+                            image_url: imageUrl ?? null,
                             is_custom: true,
                           });
                         }}

@@ -22,6 +22,7 @@ import { ModerationPage } from './pages/moderation/ModerationPage';
 import { BroadcastPage } from './pages/broadcast/BroadcastPage';
 import { PollsPage } from './pages/polls/PollsPage';
 import { GalleryPage } from './pages/gallery/GalleryPage';
+import { FeedbackPage } from './pages/feedback/FeedbackPage';
 
 function App() {
   return (
@@ -67,6 +68,8 @@ function App() {
           {/* Content routes */}
           <Route path="/broadcast" element={<BroadcastPage />} />
           <Route path="/polls" element={<PollsPage />} />
+          {/* Feedback alpha */}
+          <Route path="/feedback" element={<FeedbackPage />} />
         </Route>
       </Routes>
     </AuthProvider>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,7 @@ import {
   useCreateBggQuestion,
   useUpdateBggQuestion,
 } from '@/hooks/useBggQuiz';
+import { Pagination } from '@/components/ui/pagination';
 import { ImageUploader, QuestionTemplateInput } from '@/components/bgg-quiz';
 import { GalleryPicker } from '@/components/shared/GalleryPicker';
 import { useSearchBggGames } from '@/hooks/useBggQuiz';
@@ -187,6 +188,7 @@ function QuestionFormDialog({
   const updateQuestion = useUpdateBggQuestion();
 
   const [isActive, setIsActive] = useState(true);
+  const [isExpertOnly, setIsExpertOnly] = useState(false);
   const [category, setCategory] = useState<string>('');
   const [questionData, setQuestionData] = useState<CustomQuestionData>(getDefaultQuestionData());
   const [manualWrongAnswers, setManualWrongAnswers] = useState(false);
@@ -198,6 +200,7 @@ function QuestionFormDialog({
     if (open) {
       if (existingQuestion) {
         setIsActive(existingQuestion.is_active);
+        setIsExpertOnly(existingQuestion.is_expert_only ?? false);
         setCategory(existingQuestion.category || '');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data = existingQuestion.question_data as any;
@@ -215,6 +218,7 @@ function QuestionFormDialog({
       } else if (!questionId) {
         // New question — reset form
         setIsActive(true);
+        setIsExpertOnly(false);
         setCategory('');
         setQuestionData(getDefaultQuestionData());
         setManualWrongAnswers(false);
@@ -238,6 +242,14 @@ function QuestionFormDialog({
     setCategory(value);
     // Reset wrong answers when switching away from board games (BGG data no longer relevant)
     if (value !== 'Jeux de société' && manualWrongAnswers) {
+      setManualWrongAnswers(false);
+      updateField('wrong_answers', undefined);
+    }
+  };
+
+  const handleExpertOnlyToggle = (enabled: boolean) => {
+    setIsExpertOnly(enabled);
+    if (enabled) {
       setManualWrongAnswers(false);
       updateField('wrong_answers', undefined);
     }
@@ -279,6 +291,7 @@ function QuestionFormDialog({
     const formData: BggQuestionFormData = {
       type: dataToSave.image_url ? 'photo' : 'custom',
       is_active: isActive,
+      is_expert_only: isExpertOnly,
       category: category || null,
       question_data: dataToSave,
     };
@@ -450,7 +463,23 @@ function QuestionFormDialog({
             ))}
           </div>
 
+          {/* Expert only toggle */}
+          <div className="flex items-center gap-3 pt-4 border-t">
+            <Switch
+              checked={isExpertOnly}
+              onCheckedChange={handleExpertOnlyToggle}
+              id="is-expert-only"
+            />
+            <div>
+              <Label htmlFor="is-expert-only">Expert uniquement</Label>
+              <p className="text-xs text-muted-foreground">
+                Question sans propositions — ne sera pas utilisée dans les quiz QCM
+              </p>
+            </div>
+          </div>
+
           {/* Manual wrong answers toggle */}
+          {!isExpertOnly && (
           <div className="space-y-4 pt-4 border-t">
             <div className="flex items-center gap-3">
               <Switch
@@ -491,6 +520,7 @@ function QuestionFormDialog({
               </div>
             )}
           </div>
+          )}
 
           {/* Explanation */}
           <div className="space-y-2">
@@ -534,64 +564,50 @@ function QuestionFormDialog({
 
 // ============ MAIN PAGE ============
 
+const PAGE_SIZE = 25;
+
 export function BggQuestionsPage() {
   const [filters, setFilters] = useState<BggQuestionFilters>({
     is_active: 'all',
     has_photo: false,
     search: '',
+    category: 'all',
+    page: 0,
+    pageSize: PAGE_SIZE,
   });
   const [searchInput, setSearchInput] = useState('');
 
   const [formOpen, setFormOpen] = useState(false);
   const [editQuestionId, setEditQuestionId] = useState<string | null>(null);
 
-  const { data: questions, isLoading } = useBggQuestions(filters);
+  const { data: result, isLoading } = useBggQuestions(filters);
   const { data: stats } = useBggQuestionsStats();
+
+  const questions = result?.data || [];
+  const totalCount = result?.count || 0;
+  const page = filters.page ?? 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   const toggleActive = useToggleBggQuestionActive();
   const deleteQuestion = useDeleteBggQuestion();
 
-  // Client-side filtering for search and photo (operates on JSONB fields)
-  const filteredQuestions = useMemo(() => {
-    if (!questions) return [];
-    let result = questions;
-
-    if (filters.has_photo) {
-      result = result.filter(q => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const data = q.question_data as any;
-        return !!data?.image_url;
-      });
-    }
-
-    if (filters.search && filters.search.length >= 2) {
-      const term = filters.search.toLowerCase();
-      result = result.filter(q => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const data = q.question_data as any;
-        const answer = data?.correct_answer?.name?.toLowerCase() || '';
-        const question = data?.question?.toLowerCase() || '';
-        return answer.includes(term) || question.includes(term);
-      });
-    }
-
-    return result;
-  }, [questions, filters.has_photo, filters.search]);
-
   const hasActiveFilter =
     filters.is_active !== 'all' ||
     filters.has_photo ||
-    (filters.search && filters.search.length >= 2);
+    (filters.search && filters.search.length >= 2) ||
+    (filters.category && filters.category !== 'all');
 
   const clearFilters = () => {
-    setFilters({ is_active: 'all', has_photo: false, search: '' });
+    setFilters({ is_active: 'all', has_photo: false, search: '', category: 'all', page: 0, pageSize: PAGE_SIZE });
     setSearchInput('');
   };
+
+  const setPage = (p: number) => setFilters(f => ({ ...f, page: p }));
 
   const handleSearchChange = (value: string) => {
     setSearchInput(value);
     setTimeout(() => {
-      setFilters(f => ({ ...f, search: value }));
+      setFilters(f => ({ ...f, search: value, page: 0 }));
     }, 300);
   };
 
@@ -632,10 +648,24 @@ export function BggQuestionsPage() {
               <Input
                 value={searchInput}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Rechercher par question ou réponse..."
+                placeholder="Rechercher par question..."
                 className="pl-9"
               />
             </div>
+            <Select
+              value={filters.category ?? 'all'}
+              onValueChange={(v) => setFilters(f => ({ ...f, category: v, page: 0 }))}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Thématique" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes thématiques</SelectItem>
+                {QUIZ_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select
               value={
                 filters.is_active === 'all'
@@ -648,6 +678,7 @@ export function BggQuestionsPage() {
                 setFilters((f) => ({
                   ...f,
                   is_active: v === 'all' ? 'all' : v === 'active',
+                  page: 0,
                 }))
               }
             >
@@ -663,7 +694,7 @@ export function BggQuestionsPage() {
             <Button
               variant={filters.has_photo ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setFilters(f => ({ ...f, has_photo: !f.has_photo }))}
+              onClick={() => setFilters(f => ({ ...f, has_photo: !f.has_photo, page: 0 }))}
               className="gap-1.5"
             >
               <Image className="h-3.5 w-3.5" />
@@ -688,7 +719,7 @@ export function BggQuestionsPage() {
       ) : (
         <Card>
           <CardContent className="p-0">
-            {filteredQuestions.length === 0 ? (
+            {questions.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-4">
                   Aucune question {hasActiveFilter && 'avec ces filtres'}
@@ -707,7 +738,7 @@ export function BggQuestionsPage() {
                   <span className="w-12 text-center">Statut</span>
                   <span className="w-24 text-center">Actions</span>
                 </div>
-                {filteredQuestions.map((question) => {
+                {questions.map((question) => {
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   const data = question.question_data as any;
                   const answerName = data?.correct_answer?.name || '';
@@ -806,6 +837,8 @@ export function BggQuestionsPage() {
           </CardContent>
         </Card>
       )}
+
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
 
       {/* Question Form Dialog */}
       <QuestionFormDialog

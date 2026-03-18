@@ -37,6 +37,7 @@ export function useCreateBroadcast() {
           image_url: data.image_url || null,
           link: data.link.trim() || null,
           send_push: data.send_push,
+          type: data.type,
         });
 
       if (error) throw error;

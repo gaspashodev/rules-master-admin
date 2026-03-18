@@ -104,6 +104,7 @@ export interface BggQuizQuestion {
   type: BggQuestionType;
   question_data: QuestionData;
   is_active: boolean;
+  is_expert_only: boolean;
   category: string | null;
   quiz_id: string | null;
   created_at: string;
@@ -146,6 +147,9 @@ export interface BggQuestionFilters {
   is_active?: boolean | 'all';
   has_photo?: boolean;
   search?: string;
+  category?: string | 'all';
+  page?: number;
+  pageSize?: number;
 }
 
 export interface BggQuestionsStats {
@@ -160,6 +164,7 @@ export interface BggQuestionFormData {
   type: BggQuestionType;
   question_data: QuestionData;
   is_active: boolean;
+  is_expert_only?: boolean;
   category?: string | null;
   quiz_id?: string | null;
 }
